@@ -314,7 +314,7 @@ export default function App() {
     alert('로그아웃 되었습니다.');
   };
 
-  // --- 회원 가입 승인 처리 (Supabase DB 연동 수정본) ---
+  // --- 회원 가입 승인 처리 (Supabase DB 안전 연동 모드) ---
   const handleApproveMember = async (targetMemberId) => {
     const { data: allRows, error: fetchError } = await supabase
       .from('xbtf')
@@ -325,7 +325,7 @@ export default function App() {
       return;
     }
 
-    let foundRowPrimaryKey = null;
+    let targetRow = null;
     let updatedMemberData = null;
 
     for (let row of allRows) {
@@ -335,7 +335,7 @@ export default function App() {
           parsed = JSON.parse(parsed);
         }
         if (parsed && parsed.id === targetMemberId) {
-          foundRowPrimaryKey = row.id; 
+          targetRow = row;
           updatedMemberData = { ...parsed, status: '승인완료' };
           break;
         }
@@ -344,11 +344,15 @@ export default function App() {
       }
     }
 
-    if (foundRowPrimaryKey !== null && updatedMemberData) {
+    if (targetRow && updatedMemberData) {
+      const updatePayload = { xbtf: JSON.stringify(updatedMemberData) };
+      if (targetRow.created_at) {
+        updatePayload.created_at = targetRow.created_at;
+      }
+
       const { error: updateError } = await supabase
         .from('xbtf')
-        .update({ xbtf: JSON.stringify(updatedMemberData) })
-        .match({ id: foundRowPrimaryKey });
+        .upsert(updatePayload);
 
       if (updateError) {
         alert('DB 승인 처리 중 오류 발생: ' + updateError.message);
@@ -1329,7 +1333,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1`">이메일</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">이메일</label>
                   <input 
                     type="email" 
                     value={signupEmail} 
