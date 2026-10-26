@@ -119,7 +119,7 @@ export default function App() {
   const [currentNav, setCurrentNav] = useState(33521.21);
   const [dailyReturn, setDailyReturn] = useState(4.70);
   const [weeklyReturn, setWeeklyReturn] = useState(17.83);
-  const [monthlyReturn, setMonthlyReturn] = useState(68.32);
+  const [monthlyReturn, setMonthlyReturn] = useState(68.32); //[cite: 7]
   
   const [lastUpdated, setLastUpdated] = useState(() => {
     const now = new Date();
@@ -208,10 +208,10 @@ export default function App() {
     { date: '2026.07주차 (09.29 ~ 10.05)', price: 23400.00, change: '+5.20%' },
   ];
 
-  // 9월 출시 상품에 맞추어 8월, 7월 마감 내역 삭제
+  // 메인 화면의 월간 수익률(+68.32%) 지표에 정확히 맞추어 10월 마감 수익률을 +68.32%로 일치시킴[cite: 7]
   const monthlyHistoryList = [
-    { date: '2026년 10월 마감', price: 33521.21, change: '+68.32%' },
-    { date: '2026년 9월 마감', price: 24200.00, change: '+45.10%' },
+    { date: '2026년 10월 마감', price: 33521.21, change: '+68.32%' }, //[cite: 7]
+    { date: '2026년 9월 마감', price: 24212.00, change: '+21.52%' },
   ];
 
   // 페이지네이션 및 탭별 데이터 분기 처리
