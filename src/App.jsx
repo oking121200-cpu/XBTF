@@ -314,9 +314,8 @@ export default function App() {
     alert('로그아웃 되었습니다.');
   };
 
-  // --- 회원 가입 승인 처리 (Supabase DB 연동) ---
-  const handleApproveMember = async (id) => {
-    // 1. Supabase에서 해당 아이디를 가진 행을 찾아 status를 '승인완료'로 업데이트
+  // --- 회원 가입 승인 처리 (Supabase DB 연동 수정본) ---
+  const handleApproveMember = async (targetMemberId) => {
     const { data: allRows, error: fetchError } = await supabase
       .from('xbtf')
       .select('*');
@@ -326,7 +325,7 @@ export default function App() {
       return;
     }
 
-    let targetRowId = null;
+    let foundRowPrimaryKey = null;
     let updatedMemberData = null;
 
     for (let row of allRows) {
@@ -335,8 +334,8 @@ export default function App() {
         if (typeof parsed === 'string') {
           parsed = JSON.parse(parsed);
         }
-        if (parsed && parsed.id === id) {
-          targetRowId = row.id; // Supabase 내부 고유 id (primary key)
+        if (parsed && parsed.id === targetMemberId) {
+          foundRowPrimaryKey = row.id; 
           updatedMemberData = { ...parsed, status: '승인완료' };
           break;
         }
@@ -345,21 +344,22 @@ export default function App() {
       }
     }
 
-    if (targetRowId !== null && updatedMemberData) {
+    if (foundRowPrimaryKey !== null && updatedMemberData) {
       const { error: updateError } = await supabase
         .from('xbtf')
         .update({ xbtf: JSON.stringify(updatedMemberData) })
-        .eq('id', targetRowId);
+        .match({ id: foundRowPrimaryKey });
 
       if (updateError) {
-        console.error('Supabase 승인 업데이트 오류:', updateError.message);
         alert('DB 승인 처리 중 오류 발생: ' + updateError.message);
         return;
       }
+    } else {
+      alert('해당 회원을 데이터베이스에서 찾을 수 없습니다.');
+      return;
     }
 
-    // 2. 화면 상태 즉시 반영
-    setMembersList(membersList.map(m => m.id === id ? { ...m, status: '승인완료' } : m));
+    setMembersList(membersList.map(m => m.id === targetMemberId ? { ...m, status: '승인완료' } : m));
     alert('회원 가입이 승인되었습니다.');
     fetchMembersFromSupabase();
   };
@@ -1329,7 +1329,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">이메일</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1`">이메일</label>
                   <input 
                     type="email" 
                     value={signupEmail} 
