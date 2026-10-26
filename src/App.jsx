@@ -43,19 +43,36 @@ export default function App() {
     { id: 'kim_vip', name: '김철수', phone: '010-9876-5432', email: 'kim@example.com', status: '대기중', role: 'member', balance: 5000000, holdings: 0 },
   ]);
 
-  // Supabase에서 회원 데이터 불러오기 및 파싱
+  // 입출금 신청 내역 상태 (Supabase 연동을 위해 membersList와 함께 통합 관리)
+  const [depositRequests, setDepositRequests] = useState([
+    { 
+      id: 1, 
+      memberId: 'hong123', 
+      memberName: '홍길동', 
+      type: 'USDT 예치(입금)', 
+      amountKRW: 1350000, 
+      assignedUSDT: 1000, 
+      assignedAddress: 'TXYZ1234567890abcdefTRC20WalletAddressExample...', 
+      status: '승인완료', 
+      date: '2026-10-25 11:00' 
+    },
+  ]);
+
+  // Supabase에서 회원 및 입출금 데이터 불러오기
   const fetchMembersFromSupabase = async () => {
     const { data, error } = await supabase
       .from('xbtf')
       .select('*');
 
     if (error) {
-      console.error('회원 목록 불러오기 오류:', error.message);
+      console.error('데이터 불러오기 오류:', error.message);
       return;
     }
 
     if (data && data.length > 0) {
       const parsedMembers = [];
+      const loadedRequests = [];
+
       data.forEach(item => {
         try {
           let parsed = item.xbtf;
@@ -63,16 +80,25 @@ export default function App() {
             parsed = JSON.parse(parsed);
           }
           if (parsed) {
-            if (Array.isArray(parsed)) {
-              parsedMembers.push(...parsed);
+            // 회원 데이터와 입출금 신청 데이터를 구분해서 파싱
+            if (parsed.type === 'USDT 예치(입금)' || parsed.type === '출금신청') {
+              loadedRequests.push(parsed);
             } else {
-              parsedMembers.push(parsed);
+              if (Array.isArray(parsed)) {
+                parsedMembers.push(...parsed);
+              } else {
+                parsedMembers.push(parsed);
+              }
             }
           }
         } catch (e) {
           console.error('JSON 파싱 에러:', e);
         }
       });
+
+      if (loadedRequests.length > 0) {
+        setDepositRequests(loadedRequests);
+      }
 
       setMembersList(prev => {
         const map = new Map();
@@ -184,33 +210,11 @@ export default function App() {
     return '2026.09.26 ~ 2026.10.26';
   };
 
-  // --- 모의 투자 및 입출금 신청 상태 (전역 공유) ---
   const [tradeType, setTradeType] = useState('buy');
   const [tradeAmount, setTradeAmount] = useState('');
   const [myTrades, setMyTrades] = useState([
     { id: 1, type: '매수', qty: 100, price: 32029.15, date: '2026-10-23 14:10', status: '체결완료' },
   ]);
-
-  const [depositRequests, setDepositRequests] = useState(() => {
-    const saved = localStorage.getItem('xbtf_requests_shared');
-    return saved ? JSON.parse(saved) : [
-      { 
-        id: 1, 
-        memberId: 'hong123', 
-        memberName: '홍길동', 
-        type: 'USDT 예치(입금)', 
-        amountKRW: 1350000, 
-        assignedUSDT: 1000, 
-        assignedAddress: 'TXYZ1234567890abcdefTRC20WalletAddressExample...', 
-        status: '입금확인대기', // '대기중' -> '입금확인대기' -> '승인완료'
-        date: '2026-10-25 11:00' 
-      },
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem('xbtf_requests_shared', JSON.stringify(depositRequests));
-  }, [depositRequests]);
 
   const [depositKrwInput, setDepositKrwInput] = useState('');
   const [withdrawKrwInput, setWithdrawKrwInput] = useState('');
@@ -293,14 +297,9 @@ export default function App() {
 
     const { error } = await supabase
       .from('xbtf')
-      .insert([
-        { 
-          xbtf: JSON.stringify(newMemberData)
-        }
-      ]);
+      .insert([{ xbtf: JSON.stringify(newMemberData) }]);
 
     if (error) {
-      console.error('Supabase 저장 오류:', error.message);
       alert('회원가입 중 오류가 발생했습니다: ' + error.message);
       return;
     }
@@ -323,12 +322,9 @@ export default function App() {
 
   // --- 회원 가입 승인 처리 ---
   const handleApproveMember = async (targetMemberId) => {
-    const { data: allRows, error: fetchError } = await supabase
-      .from('xbtf')
-      .select('*');
-
+    const { data: allRows, error: fetchError } = await supabase.from('xbtf').select('*');
     if (fetchError) {
-      alert('회원 정보를 불러오는 중 오류가 발생했습니다: ' + fetchError.message);
+      alert('회원 정보를 불러오는 중 오류 발생: ' + fetchError.message);
       return;
     }
 
@@ -338,36 +334,24 @@ export default function App() {
     for (let row of allRows) {
       try {
         let parsed = row.xbtf;
-        if (typeof parsed === 'string') {
-          parsed = JSON.parse(parsed);
-        }
+        if (typeof parsed === 'string') parsed = JSON.parse(parsed);
         if (parsed && parsed.id === targetMemberId) {
           targetRow = row;
           updatedMemberData = { ...parsed, status: '승인완료' };
           break;
         }
-      } catch (e) {
-        console.error('파싱 에러:', e);
-      }
+      } catch (e) {}
     }
 
     if (targetRow && updatedMemberData) {
       const updatePayload = { xbtf: JSON.stringify(updatedMemberData) };
-      if (targetRow.created_at) {
-        updatePayload.created_at = targetRow.created_at;
-      }
+      if (targetRow.created_at) updatePayload.created_at = targetRow.created_at;
 
-      const { error: updateError } = await supabase
-        .from('xbtf')
-        .upsert(updatePayload);
-
+      const { error: updateError } = await supabase.from('xbtf').upsert(updatePayload);
       if (updateError) {
-        alert('DB 승인 처리 중 오류 발생: ' + updateError.message);
+        alert('DB 승인 처리 오류: ' + updateError.message);
         return;
       }
-    } else {
-      alert('해당 회원을 데이터베이스에서 찾을 수 없습니다.');
-      return;
     }
 
     setMembersList(membersList.map(m => m.id === targetMemberId ? { ...m, status: '승인완료' } : m));
@@ -375,8 +359,8 @@ export default function App() {
     fetchMembersFromSupabase();
   };
 
-  // --- 1단계: 관리자가 지갑 주소 및 테더 수량 안내 정보 전송 ---
-  const handleAdminSendDetails = (reqId) => {
+  // --- 1단계: 관리자가 지갑 주소 및 테더 수량 안내 정보 전송 (Supabase 반영) ---
+  const handleAdminSendDetails = async (reqId) => {
     const input = adminInputData[reqId] || {};
     const usdt = parseFloat(input.usdt);
     const addr = input.address;
@@ -386,70 +370,70 @@ export default function App() {
       return;
     }
 
-    setDepositRequests(depositRequests.map(r => {
-      if (r.id === reqId) {
-        return { 
-          ...r, 
-          assignedUSDT: usdt, 
-          assignedAddress: addr, 
-          status: '입금확인대기' // 안내 완료 후 회원의 입금 대기 상태로 변경
-        };
-      }
-      return r;
-    }));
+    const targetReq = depositRequests.find(r => r.id === reqId);
+    if (!targetReq) return;
 
-    alert('입금 안내 정보(USDT 수량 및 지갑 주소)가 회원에게 전송되었습니다. 회원이 입금하기를 기다려주세요.');
+    const updatedReq = { ...targetReq, assignedUSDT: usdt, assignedAddress: addr, status: '입금확인대기' };
+
+    // Supabase에 업데이트 반영
+    const { data: allRows } = await supabase.from('xbtf').select('*');
+    if (allRows) {
+      for (let row of allRows) {
+        try {
+          let parsed = row.xbtf;
+          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          if (parsed && parsed.id === targetReq.id) {
+            const updatePayload = { xbtf: JSON.stringify(updatedReq) };
+            if (row.created_at) updatePayload.created_at = row.created_at;
+            await supabase.from('xbtf').upsert(updatePayload);
+            break;
+          }
+        } catch (e) {}
+      }
+    }
+
+    setDepositRequests(depositRequests.map(r => r.id === reqId ? updatedReq : r));
+    alert('입금 안내 정보가 전송되었습니다.');
+    fetchMembersFromSupabase();
   };
 
-  // --- 2단계: 관리자가 실제 입금 확인 후 최종 승인 (회원 잔고 충전) ---
+  // --- 2단계: 관리자가 최종 입금 확인 후 승인 및 회원 잔고 충전 ---
   const handleAdminConfirmDeposit = async (reqId) => {
     const targetReq = depositRequests.find(r => r.id === reqId);
     if (!targetReq || targetReq.status === '승인완료') return;
 
     const memberId = targetReq.memberId;
     const addAmount = targetReq.amountKRW;
+    const updatedReq = { ...targetReq, status: '승인완료' };
 
-    // 1. 상태를 '승인완료'로 변경
-    setDepositRequests(depositRequests.map(r => r.id === reqId ? { ...r, status: '승인완료' } : r));
-
-    // 2. Supabase DB에서 해당 회원의 예수금 잔고(balance) 업데이트
-    const { data: allRows, error: fetchError } = await supabase
-      .from('xbtf')
-      .select('*');
-
-    if (!fetchError && allRows) {
+    // 1. 입금 요청 상태 '승인완료'로 Supabase 업데이트
+    const { data: allRows } = await supabase.from('xbtf').select('*');
+    if (allRows) {
       for (let row of allRows) {
         try {
           let parsed = row.xbtf;
           if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          // 입금 요청건 업데이트
+          if (parsed && parsed.id === targetReq.id) {
+            const updatePayload = { xbtf: JSON.stringify(updatedReq) };
+            if (row.created_at) updatePayload.created_at = row.created_at;
+            await supabase.from('xbtf').upsert(updatePayload);
+          }
+          // 회원 잔고 업데이트
           if (parsed && parsed.id === memberId) {
             const currentBal = parsed.balance || 0;
             const updatedMember = { ...parsed, balance: currentBal + addAmount };
-            
             const updatePayload = { xbtf: JSON.stringify(updatedMember) };
             if (row.created_at) updatePayload.created_at = row.created_at;
-
             await supabase.from('xbtf').upsert(updatePayload);
-            break;
           }
-        } catch (e) {
-          console.error('잔고 충전 파싱 에러:', e);
-        }
+        } catch (e) {}
       }
     }
 
-    // 3. 로컬 상태 갱신
-    setMembersList(membersList.map(m => {
-      if (m.id === memberId) {
-        const newBal = m.balance + addAmount;
-        if (currentUser && currentUser.id === m.id) {
-          setCurrentUser(prev => ({ ...prev, balance: newBal }));
-        }
-        return { ...m, balance: newBal };
-      }
-      return m;
-    }));
-
+    setDepositRequests(depositRequests.map(r => r.id === reqId ? updatedReq : r));
+    setMembersList(membersList.map(m => m.id === memberId ? { ...m, balance: m.balance + addAmount } : m));
+    
     alert(`입금이 최종 확인되어 회원 계정에 ${addAmount.toLocaleString()}원이 정상 충전되었습니다!`);
     fetchMembersFromSupabase();
   };
@@ -477,7 +461,8 @@ export default function App() {
     alert('출금 신청이 최종 승인 처리되었습니다.');
   };
 
-  const handleDepositSubmit = (e) => {
+  // --- 예치 신청 제출 (Supabase에 직접 저장) ---
+  const handleDepositSubmit = async (e) => {
     e.preventDefault();
     const krw = parseInt(depositKrwInput);
     if (!krw || krw <= 0) {
@@ -493,16 +478,22 @@ export default function App() {
       amountKRW: krw,
       assignedUSDT: 0,
       assignedAddress: '',
-      status: '대기중', // 관리자가 아직 주소를 안 보낸 초기 상태
+      status: '대기중',
       date: getKSTDateString()
     };
 
-    setDepositRequests([newReq, ...depositRequests]);
+    const { error } = await supabase.from('xbtf').insert([{ xbtf: JSON.stringify(newReq) }]);
+    if (error) {
+      alert('예치 신청 중 오류가 발생했습니다: ' + error.message);
+      return;
+    }
+
     alert('예치 신청이 접수되었습니다! 관리자가 확인 후 입금 주소와 수량을 안내해 드립니다.');
     setDepositKrwInput('');
+    fetchMembersFromSupabase();
   };
 
-  const handleWithdrawSubmit = (e) => {
+  const handleWithdrawSubmit = async (e) => {
     e.preventDefault();
     const krw = parseInt(withdrawKrwInput);
     if (!krw || krw <= 0 || !withdrawAddress) {
@@ -522,10 +513,11 @@ export default function App() {
       date: getKSTDateString()
     };
 
-    setDepositRequests([newReq, ...depositRequests]);
+    await supabase.from('xbtf').insert([{ xbtf: JSON.stringify(newReq) }]);
     alert('출금 신청이 접수되었습니다. 관리자 승인 후 처리됩니다.');
     setWithdrawKrwInput('');
     setWithdrawAddress('');
+    fetchMembersFromSupabase();
   };
 
   const handleAdminSubmit = (e) => {
@@ -1128,7 +1120,7 @@ export default function App() {
                   onClick={fetchMembersFromSupabase}
                   className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" /> DB 회원 목록 새로고침
+                  <RefreshCw className="w-3.5 h-3.5" /> DB 데이터 새로고침
                 </button>
                 <div className="text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
                   총 회원 수: <span className="font-bold text-slate-800">{membersList.length}명</span>
@@ -1224,7 +1216,7 @@ export default function App() {
 
             {/* 입출금 신청 관리 목록 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">회원 입출금 / 예치 신청 처리</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-4">회원 입출금 / 예치 신청 처리 (Supabase 실시간 공유)</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -1238,75 +1230,81 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
-                    {depositRequests.map((req) => (
-                      <tr key={req.id} className="hover:bg-slate-50">
-                        <td className="py-3 px-4 font-bold text-slate-800">{req.memberName} ({req.memberId})</td>
-                        <td className="py-3 px-4 font-semibold text-slate-700">{req.type}</td>
-                        <td className="py-3 px-4 font-bold text-slate-900">{req.amountKRW.toLocaleString()}원</td>
-                        <td className="py-3 px-4 text-xs space-y-1">
-                          {req.type === 'USDT 예치(입금)' && req.status === '대기중' ? (
-                            <div className="space-y-1">
-                              <input 
-                                type="number"
-                                placeholder="USDT 수량"
-                                onChange={(e) => setAdminInputData({
-                                  ...adminInputData, 
-                                  [req.id]: { ...(adminInputData[req.id] || {}), usdt: e.target.value }
-                                })}
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs"
-                              />
-                              <input 
-                                type="text"
-                                placeholder="입금 받을 지갑 주소"
-                                onChange={(e) => setAdminInputData({
-                                  ...adminInputData, 
-                                  [req.id]: { ...(adminInputData[req.id] || {}), address: e.target.value }
-                                })}
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs"
-                              />
-                            </div>
-                          ) : (
-                            <div>
-                              <div className="font-semibold">{req.assignedUSDT} USDT</div>
-                              <div className="text-slate-400 truncate max-w-xs">{req.assignedAddress}</div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === '승인완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {req.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {req.status !== '승인완료' && (
-                            req.type === 'USDT 예치(입금)' ? (
-                              req.status === '대기중' ? (
-                                <button 
-                                  onClick={() => handleAdminSendDetails(req.id)}
-                                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
-                                >
-                                  입금 안내 정보 전송
-                                </button>
+                    {depositRequests.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-6 text-center text-slate-400 text-xs">접수된 입출금 신청 내역이 없습니다.</td>
+                      </tr>
+                    ) : (
+                      depositRequests.map((req) => (
+                        <tr key={req.id} className="hover:bg-slate-50">
+                          <td className="py-3 px-4 font-bold text-slate-800">{req.memberName} ({req.memberId})</td>
+                          <td className="py-3 px-4 font-semibold text-slate-700">{req.type}</td>
+                          <td className="py-3 px-4 font-bold text-slate-900">{req.amountKRW.toLocaleString()}원</td>
+                          <td className="py-3 px-4 text-xs space-y-1">
+                            {req.type === 'USDT 예치(입금)' && req.status === '대기중' ? (
+                              <div className="space-y-1">
+                                <input 
+                                  type="number"
+                                  placeholder="USDT 수량"
+                                  onChange={(e) => setAdminInputData({
+                                    ...adminInputData, 
+                                    [req.id]: { ...(adminInputData[req.id] || {}), usdt: e.target.value }
+                                  })}
+                                  className="w-full px-2 py-1 border border-slate-300 rounded text-xs"
+                                />
+                                <input 
+                                  type="text"
+                                  placeholder="입금 받을 지갑 주소"
+                                  onChange={(e) => setAdminInputData({
+                                    ...adminInputData, 
+                                    [req.id]: { ...(adminInputData[req.id] || {}), address: e.target.value }
+                                  })}
+                                  className="w-full px-2 py-1 border border-slate-300 rounded text-xs"
+                                />
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="font-semibold">{req.assignedUSDT} USDT</div>
+                                <div className="text-slate-400 truncate max-w-xs">{req.assignedAddress}</div>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === '승인완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {req.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {req.status !== '승인완료' && (
+                              req.type === 'USDT 예치(입금)' ? (
+                                req.status === '대기중' ? (
+                                  <button 
+                                    onClick={() => handleAdminSendDetails(req.id)}
+                                    className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
+                                  >
+                                    입금 안내 정보 전송
+                                  </button>
+                                ) : (
+                                  <button 
+                                    onClick={() => handleAdminConfirmDeposit(req.id)}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
+                                  >
+                                    입금 확인 및 잔고 충전 승인
+                                  </button>
+                                )
                               ) : (
                                 <button 
-                                  onClick={() => handleAdminConfirmDeposit(req.id)}
+                                  onClick={() => handleApproveWithdraw(req.id)}
                                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
                                 >
-                                  입금 확인 및 잔고 충전 승인
+                                  출금 최종승인
                                 </button>
                               )
-                            ) : (
-                              <button 
-                                onClick={() => handleApproveWithdraw(req.id)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
-                              >
-                                출금 최종승인
-                              </button>
-                            )
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
