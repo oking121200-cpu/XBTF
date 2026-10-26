@@ -37,29 +37,15 @@ export default function App() {
   const [signupId, setSignupId] = useState('');
   const [signupPw, setSignupPw] = useState('');
 
-  // 회원 목록 상태 (Supabase 연동)
+  // 회원 및 입출금 목록 상태 (Supabase 연동)
   const [membersList, setMembersList] = useState([
     { id: 'hong123', name: '홍길동', phone: '010-1234-5678', email: 'hong@example.com', status: '승인완료', role: 'member', balance: 15420000, holdings: 450 },
-    { id: 'kim_vip', name: '김철수', phone: '010-9876-5432', email: 'kim@example.com', status: '대기중', role: 'member', balance: 5000000, holdings: 0 },
   ]);
 
-  // 입출금 신청 내역 상태 (Supabase 연동을 위해 membersList와 함께 통합 관리)
-  const [depositRequests, setDepositRequests] = useState([
-    { 
-      id: 1, 
-      memberId: 'hong123', 
-      memberName: '홍길동', 
-      type: 'USDT 예치(입금)', 
-      amountKRW: 1350000, 
-      assignedUSDT: 1000, 
-      assignedAddress: 'TXYZ1234567890abcdefTRC20WalletAddressExample...', 
-      status: '승인완료', 
-      date: '2026-10-25 11:00' 
-    },
-  ]);
+  const [depositRequests, setDepositRequests] = useState([]);
 
-  // Supabase에서 회원 및 입출금 데이터 불러오기
-  const fetchMembersFromSupabase = async () => {
+  // Supabase에서 데이터 불러오기
+  const fetchDataFromSupabase = async () => {
     const { data, error } = await supabase
       .from('xbtf')
       .select('*');
@@ -80,7 +66,6 @@ export default function App() {
             parsed = JSON.parse(parsed);
           }
           if (parsed) {
-            // 회원 데이터와 입출금 신청 데이터를 구분해서 파싱
             if (parsed.type === 'USDT 예치(입금)' || parsed.type === '출금신청') {
               loadedRequests.push(parsed);
             } else {
@@ -103,7 +88,6 @@ export default function App() {
       setMembersList(prev => {
         const map = new Map();
         map.set('hong123', { id: 'hong123', name: '홍길동', phone: '010-1234-5678', email: 'hong@example.com', status: '승인완료', role: 'member', balance: 15420000, holdings: 450 });
-        map.set('kim_vip', { id: 'kim_vip', name: '김철수', phone: '010-9876-5432', email: 'kim@example.com', status: '대기중', role: 'member', balance: 5000000, holdings: 0 });
         
         parsedMembers.forEach(pm => {
           if (pm && pm.id) {
@@ -126,7 +110,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchMembersFromSupabase();
+    fetchDataFromSupabase();
   }, []);
 
   // --- 펀드 및 대시보드 상태 관리 ---
@@ -228,14 +212,12 @@ export default function App() {
     { id: 1, admin: 'admin', action: '기준가 등록 (33,521.21원)', time: '2026.10.26 09:00' },
   ]);
 
-  // --- 한국 시간(KST) 정확한 날짜 포맷팅 함수 ---
   const getKSTDateString = () => {
     const now = new Date();
     const kstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000));
     return kstDate.toISOString().replace('T', ' ').substring(0, 16);
   };
 
-  // --- 로그인 처리 ---
   const handleLogin = (e) => {
     e.preventDefault();
     if (!loginId || !loginPw) {
@@ -247,7 +229,7 @@ export default function App() {
       setCurrentUser({ id: 'admin', name: '플랫폼 관리자', role: 'admin' });
       setAuthModal(null);
       setActiveTab('admin');
-      fetchMembersFromSupabase();
+      fetchDataFromSupabase();
       alert('관리자 계정으로 로그인되었습니다.');
       setLoginId('');
       setLoginPw('');
@@ -271,7 +253,6 @@ export default function App() {
     }
   };
 
-  // --- 회원가입 신청 (Supabase 연동) ---
   const handleSignup = async (e) => {
     e.preventDefault();
     if (!signupName || !signupPhone || !signupEmail || !signupId || !signupPw) {
@@ -295,10 +276,7 @@ export default function App() {
       holdings: 0
     };
 
-    const { error } = await supabase
-      .from('xbtf')
-      .insert([{ xbtf: JSON.stringify(newMemberData) }]);
-
+    const { error } = await supabase.from('xbtf').insert([{ xbtf: JSON.stringify(newMemberData) }]);
     if (error) {
       alert('회원가입 중 오류가 발생했습니다: ' + error.message);
       return;
@@ -311,7 +289,7 @@ export default function App() {
     setSignupId('');
     setSignupPw('');
     setAuthModal('login');
-    fetchMembersFromSupabase();
+    fetchDataFromSupabase();
   };
 
   const handleLogout = () => {
@@ -320,7 +298,6 @@ export default function App() {
     alert('로그아웃 되었습니다.');
   };
 
-  // --- 회원 가입 승인 처리 ---
   const handleApproveMember = async (targetMemberId) => {
     const { data: allRows, error: fetchError } = await supabase.from('xbtf').select('*');
     if (fetchError) {
@@ -356,10 +333,9 @@ export default function App() {
 
     setMembersList(membersList.map(m => m.id === targetMemberId ? { ...m, status: '승인완료' } : m));
     alert('회원 가입이 승인되었습니다.');
-    fetchMembersFromSupabase();
+    fetchDataFromSupabase();
   };
 
-  // --- 1단계: 관리자가 지갑 주소 및 테더 수량 안내 정보 전송 (Supabase 반영) ---
   const handleAdminSendDetails = async (reqId) => {
     const input = adminInputData[reqId] || {};
     const usdt = parseFloat(input.usdt);
@@ -375,7 +351,6 @@ export default function App() {
 
     const updatedReq = { ...targetReq, assignedUSDT: usdt, assignedAddress: addr, status: '입금확인대기' };
 
-    // Supabase에 업데이트 반영
     const { data: allRows } = await supabase.from('xbtf').select('*');
     if (allRows) {
       for (let row of allRows) {
@@ -394,10 +369,9 @@ export default function App() {
 
     setDepositRequests(depositRequests.map(r => r.id === reqId ? updatedReq : r));
     alert('입금 안내 정보가 전송되었습니다.');
-    fetchMembersFromSupabase();
+    fetchDataFromSupabase();
   };
 
-  // --- 2단계: 관리자가 최종 입금 확인 후 승인 및 회원 잔고 충전 ---
   const handleAdminConfirmDeposit = async (reqId) => {
     const targetReq = depositRequests.find(r => r.id === reqId);
     if (!targetReq || targetReq.status === '승인완료') return;
@@ -406,20 +380,17 @@ export default function App() {
     const addAmount = targetReq.amountKRW;
     const updatedReq = { ...targetReq, status: '승인완료' };
 
-    // 1. 입금 요청 상태 '승인완료'로 Supabase 업데이트
     const { data: allRows } = await supabase.from('xbtf').select('*');
     if (allRows) {
       for (let row of allRows) {
         try {
           let parsed = row.xbtf;
           if (typeof parsed === 'string') parsed = JSON.parse(parsed);
-          // 입금 요청건 업데이트
           if (parsed && parsed.id === targetReq.id) {
             const updatePayload = { xbtf: JSON.stringify(updatedReq) };
             if (row.created_at) updatePayload.created_at = row.created_at;
             await supabase.from('xbtf').upsert(updatePayload);
           }
-          // 회원 잔고 업데이트
           if (parsed && parsed.id === memberId) {
             const currentBal = parsed.balance || 0;
             const updatedMember = { ...parsed, balance: currentBal + addAmount };
@@ -435,7 +406,7 @@ export default function App() {
     setMembersList(membersList.map(m => m.id === memberId ? { ...m, balance: m.balance + addAmount } : m));
     
     alert(`입금이 최종 확인되어 회원 계정에 ${addAmount.toLocaleString()}원이 정상 충전되었습니다!`);
-    fetchMembersFromSupabase();
+    fetchDataFromSupabase();
   };
 
   const handleApproveWithdraw = (reqId) => {
@@ -461,7 +432,6 @@ export default function App() {
     alert('출금 신청이 최종 승인 처리되었습니다.');
   };
 
-  // --- 예치 신청 제출 (Supabase에 직접 저장) ---
   const handleDepositSubmit = async (e) => {
     e.preventDefault();
     const krw = parseInt(depositKrwInput);
@@ -490,7 +460,7 @@ export default function App() {
 
     alert('예치 신청이 접수되었습니다! 관리자가 확인 후 입금 주소와 수량을 안내해 드립니다.');
     setDepositKrwInput('');
-    fetchMembersFromSupabase();
+    fetchDataFromSupabase();
   };
 
   const handleWithdrawSubmit = async (e) => {
@@ -517,7 +487,7 @@ export default function App() {
     alert('출금 신청이 접수되었습니다. 관리자 승인 후 처리됩니다.');
     setWithdrawKrwInput('');
     setWithdrawAddress('');
-    fetchMembersFromSupabase();
+    fetchDataFromSupabase();
   };
 
   const handleAdminSubmit = (e) => {
@@ -596,7 +566,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative">
-      {/* 상단 네비게이션 */}
       <header className="bg-slate-900 text-white sticky top-0 z-40 shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center">
           <div className="flex items-center space-x-3">
@@ -624,7 +593,7 @@ export default function App() {
 
               {currentUser && currentUser.role === 'admin' && (
                 <button 
-                  onClick={() => { fetchMembersFromSupabase(); setActiveTab('admin'); }} 
+                  onClick={() => { fetchDataFromSupabase(); setActiveTab('admin'); }} 
                   className={`px-4 py-1.5 rounded-md text-sm font-medium transition cursor-pointer ${activeTab === 'admin' ? 'bg-purple-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}
                 >
                   관리자 페이지
@@ -664,10 +633,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* 메인 콘텐츠 영역 */}
       <main className="max-w-7xl mx-auto px-4 py-6">
-
-        {/* ================= 대시보드 (메인) ================= */}
         {activeTab === 'main' && (
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
@@ -683,7 +649,7 @@ export default function App() {
                 </span>
                 <button 
                   onClick={() => {
-                    fetchMembersFromSupabase();
+                    fetchDataFromSupabase();
                     const now = new Date();
                     const formatted = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
                     setLastUpdated(formatted);
@@ -696,7 +662,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 4개 지표 카드 */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                 <div className="flex items-center justify-between text-blue-600 mb-2">
@@ -735,7 +700,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 차트 영역과 우측 요약 카드 */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
               <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
                 <div>
@@ -825,7 +789,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 하단 상세 내역 테이블 */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
@@ -889,7 +852,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= 마이페이지 (회원 전용) ================= */}
         {activeTab === 'member' && currentUser?.role === 'member' && (
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -921,9 +883,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* 모의 투자 및 입출금 영역 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 모의 투자 섹션 */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                   <BarChart2 className="w-5 h-5 text-blue-600" /> 펀드 좌수 거래 (매수/매도)
@@ -997,7 +957,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 예치 및 출금 신청 섹션 */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
@@ -1061,7 +1020,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 나의 입출금 신청 내역 현황 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <h3 className="text-lg font-bold text-slate-900 mb-4">나의 입출금 및 예치 신청 내역</h3>
               <div className="overflow-x-auto">
@@ -1107,7 +1065,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= 관리자 페이지 ================= */}
         {activeTab === 'admin' && currentUser?.role === 'admin' && (
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1117,7 +1074,7 @@ export default function App() {
               </div>
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={fetchMembersFromSupabase}
+                  onClick={fetchDataFromSupabase}
                   className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
                 >
                   <RefreshCw className="w-3.5 h-3.5" /> DB 데이터 새로고침
@@ -1128,7 +1085,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 관리자 기준가 등록 폼 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <h3 className="text-lg font-bold text-slate-900 mb-4">새로운 기준가격 공시 및 등록</h3>
               <form onSubmit={handleAdminSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -1170,7 +1126,6 @@ export default function App() {
               </form>
             </div>
 
-            {/* 회원가입 관리 및 승인 대기 목록 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <h3 className="text-lg font-bold text-slate-900 mb-4">회원 가입 승인 관리 (Supabase 연동 실시간)</h3>
               <div className="overflow-x-auto">
@@ -1214,7 +1169,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 입출금 신청 관리 목록 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <h3 className="text-lg font-bold text-slate-900 mb-4">회원 입출금 / 예치 신청 처리 (Supabase 실시간 공유)</h3>
               <div className="overflow-x-auto">
@@ -1232,7 +1186,7 @@ export default function App() {
                   <tbody className="divide-y divide-slate-100 text-sm">
                     {depositRequests.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="py-6 text-center text-slate-400 text-xs">접수된 입출금 신청 내역이 없습니다.</td>
+                        <td colSpan="6" className="py-6 text-center text-slate-400 text-xs">접수된 입출금 신청 내역이 없습니다. (새로고침을 눌러보세요)</td>
                       </tr>
                     ) : (
                       depositRequests.map((req) => (
@@ -1312,126 +1266,61 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= 로그인 모달 ================= */}
         {authModal === 'login' && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-fadeIn">
-              <button 
-                onClick={() => setAuthModal(null)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative">
+              <button onClick={() => setAuthModal(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
               <h3 className="text-xl font-bold text-slate-900 mb-1">로그인</h3>
-              <p className="text-xs text-slate-500 mb-6">XBTF 플랫폼에 오신 것을 환영합니다.</p>
-              
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4 mt-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">아이디</label>
-                  <input 
-                    type="text" 
-                    value={loginId} 
-                    onChange={(e) => setLoginId(e.target.value)} 
-                    placeholder="아이디를 입력하세요" 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
+                  <input type="text" value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="아이디" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">비밀번호</label>
-                  <input 
-                    type="password" 
-                    value={loginPw} 
-                    onChange={(e) => setLoginPw(e.target.value)} 
-                    placeholder="비밀번호를 입력하세요" 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
+                  <input type="password" value={loginPw} onChange={(e) => setLoginPw(e.target.value)} placeholder="비밀번호" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
-                <button 
-                  type="submit" 
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm transition cursor-pointer mt-2"
-                >
-                  로그인
-                </button>
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm transition cursor-pointer">로그인</button>
               </form>
             </div>
           </div>
         )}
 
-        {/* ================= 회원가입 모달 ================= */}
         {authModal === 'signup' && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-fadeIn">
-              <button 
-                onClick={() => setAuthModal(null)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative">
+              <button onClick={() => setAuthModal(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
               <h3 className="text-xl font-bold text-slate-900 mb-1">회원가입 신청</h3>
-              <p className="text-xs text-slate-500 mb-4">정보를 입력하시면 관리자 승인 후 이용 가능합니다.</p>
-              
-              <form onSubmit={handleSignup} className="space-y-3">
+              <form onSubmit={handleSignup} className="space-y-3 mt-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">이름</label>
-                  <input 
-                    type="text" 
-                    value={signupName} 
-                    onChange={(e) => setSignupName(e.target.value)} 
-                    placeholder="실명을 입력하세요" 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
+                  <input type="text" value={signupName} onChange={(e) => setSignupName(e.target.value)} placeholder="실명" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">휴대폰 번호</label>
-                  <input 
-                    type="text" 
-                    value={signupPhone} 
-                    onChange={(e) => setSignupPhone(e.target.value)} 
-                    placeholder="010-0000-0000" 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">연락처</label>
+                  <input type="text" value={signupPhone} onChange={(e) => setSignupPhone(e.target.value)} placeholder="010-0000-0000" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">이메일</label>
-                  <input 
-                    type="email" 
-                    value={signupEmail} 
-                    onChange={(e) => setSignupEmail(e.target.value)} 
-                    placeholder="example@email.com" 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
+                  <input type="email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} placeholder="email@example.com" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">아이디</label>
-                  <input 
-                    type="text" 
-                    value={signupId} 
-                    onChange={(e) => setSignupId(e.target.value)} 
-                    placeholder="사용할 아이디" 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
+                  <input type="text" value={signupId} onChange={(e) => setSignupId(e.target.value)} placeholder="아이디" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">비밀번호</label>
-                  <input 
-                    type="password" 
-                    value={signupPw} 
-                    onChange={(e) => setSignupPw(e.target.value)} 
-                    placeholder="비밀번호" 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
+                  <input type="password" value={signupPw} onChange={(e) => setSignupPw(e.target.value)} placeholder="비밀번호" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
-                <button 
-                  type="submit" 
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-sm transition cursor-pointer mt-3"
-                >
-                  가입 신청하기
-                </button>
+                <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-sm transition cursor-pointer">가입 신청하기</button>
               </form>
             </div>
           </div>
         )}
-
       </main>
     </div>
   );
