@@ -184,7 +184,7 @@ export default function App() {
     return '2026.09.26 ~ 2026.10.26';
   };
 
-  // --- 모의 투자 및 입출금 신청 상태 ---
+  // --- 모의 투자 및 입출금 신청 상태 (전역 공유) ---
   const [tradeType, setTradeType] = useState('buy');
   const [tradeAmount, setTradeAmount] = useState('');
   const [myTrades, setMyTrades] = useState([
@@ -192,7 +192,7 @@ export default function App() {
   ]);
 
   const [depositRequests, setDepositRequests] = useState(() => {
-    const saved = localStorage.getItem('xbtf_requests');
+    const saved = localStorage.getItem('xbtf_requests_shared');
     return saved ? JSON.parse(saved) : [
       { 
         id: 1, 
@@ -202,14 +202,14 @@ export default function App() {
         amountKRW: 1350000, 
         assignedUSDT: 1000, 
         assignedAddress: 'TXYZ1234567890abcdefTRC20WalletAddressExample...', 
-        status: '승인완료', 
+        status: '입금확인대기', // '대기중' -> '입금확인대기' -> '승인완료'
         date: '2026-10-25 11:00' 
       },
     ];
   });
 
   useEffect(() => {
-    localStorage.setItem('xbtf_requests', JSON.stringify(depositRequests));
+    localStorage.setItem('xbtf_requests_shared', JSON.stringify(depositRequests));
   }, [depositRequests]);
 
   const [depositKrwInput, setDepositKrwInput] = useState('');
@@ -223,6 +223,13 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState([
     { id: 1, admin: 'admin', action: '기준가 등록 (33,521.21원)', time: '2026.10.26 09:00' },
   ]);
+
+  // --- 한국 시간(KST) 정확한 날짜 포맷팅 함수 ---
+  const getKSTDateString = () => {
+    const now = new Date();
+    const kstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+    return kstDate.toISOString().replace('T', ' ').substring(0, 16);
+  };
 
   // --- 로그인 처리 ---
   const handleLogin = (e) => {
@@ -314,7 +321,7 @@ export default function App() {
     alert('로그아웃 되었습니다.');
   };
 
-  // --- 회원 가입 승인 처리 (Supabase DB 안전 연동 모드) ---
+  // --- 회원 가입 승인 처리 ---
   const handleApproveMember = async (targetMemberId) => {
     const { data: allRows, error: fetchError } = await supabase
       .from('xbtf')
@@ -368,6 +375,7 @@ export default function App() {
     fetchMembersFromSupabase();
   };
 
+  // --- 1단계: 관리자가 지갑 주소 및 테더 수량 안내 정보 전송 ---
   const handleAdminSendDetails = (reqId) => {
     const input = adminInputData[reqId] || {};
     const usdt = parseFloat(input.usdt);
@@ -380,26 +388,70 @@ export default function App() {
 
     setDepositRequests(depositRequests.map(r => {
       if (r.id === reqId) {
-        return { ...r, assignedUSDT: usdt, assignedAddress: addr, status: '승인완료' };
+        return { 
+          ...r, 
+          assignedUSDT: usdt, 
+          assignedAddress: addr, 
+          status: '입금확인대기' // 안내 완료 후 회원의 입금 대기 상태로 변경
+        };
       }
       return r;
     }));
 
+    alert('입금 안내 정보(USDT 수량 및 지갑 주소)가 회원에게 전송되었습니다. 회원이 입금하기를 기다려주세요.');
+  };
+
+  // --- 2단계: 관리자가 실제 입금 확인 후 최종 승인 (회원 잔고 충전) ---
+  const handleAdminConfirmDeposit = async (reqId) => {
     const targetReq = depositRequests.find(r => r.id === reqId);
-    if (targetReq) {
-      setMembersList(membersList.map(m => {
-        if (m.id === targetReq.memberId) {
-          const newBal = m.balance + targetReq.amountKRW;
-          if (currentUser && currentUser.id === m.id) {
-            setCurrentUser(prev => ({ ...prev, balance: newBal }));
+    if (!targetReq || targetReq.status === '승인완료') return;
+
+    const memberId = targetReq.memberId;
+    const addAmount = targetReq.amountKRW;
+
+    // 1. 상태를 '승인완료'로 변경
+    setDepositRequests(depositRequests.map(r => r.id === reqId ? { ...r, status: '승인완료' } : r));
+
+    // 2. Supabase DB에서 해당 회원의 예수금 잔고(balance) 업데이트
+    const { data: allRows, error: fetchError } = await supabase
+      .from('xbtf')
+      .select('*');
+
+    if (!fetchError && allRows) {
+      for (let row of allRows) {
+        try {
+          let parsed = row.xbtf;
+          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          if (parsed && parsed.id === memberId) {
+            const currentBal = parsed.balance || 0;
+            const updatedMember = { ...parsed, balance: currentBal + addAmount };
+            
+            const updatePayload = { xbtf: JSON.stringify(updatedMember) };
+            if (row.created_at) updatePayload.created_at = row.created_at;
+
+            await supabase.from('xbtf').upsert(updatePayload);
+            break;
           }
-          return { ...m, balance: newBal };
+        } catch (e) {
+          console.error('잔고 충전 파싱 에러:', e);
         }
-        return m;
-      }));
+      }
     }
 
-    alert('입금 안내 정보가 전달되었으며, 예치 승인 및 잔고 충전이 완료되었습니다.');
+    // 3. 로컬 상태 갱신
+    setMembersList(membersList.map(m => {
+      if (m.id === memberId) {
+        const newBal = m.balance + addAmount;
+        if (currentUser && currentUser.id === m.id) {
+          setCurrentUser(prev => ({ ...prev, balance: newBal }));
+        }
+        return { ...m, balance: newBal };
+      }
+      return m;
+    }));
+
+    alert(`입금이 최종 확인되어 회원 계정에 ${addAmount.toLocaleString()}원이 정상 충전되었습니다!`);
+    fetchMembersFromSupabase();
   };
 
   const handleApproveWithdraw = (reqId) => {
@@ -441,8 +493,8 @@ export default function App() {
       amountKRW: krw,
       assignedUSDT: 0,
       assignedAddress: '',
-      status: '대기중',
-      date: new Date().toISOString().replace('T', ' ').substring(0, 16)
+      status: '대기중', // 관리자가 아직 주소를 안 보낸 초기 상태
+      date: getKSTDateString()
     };
 
     setDepositRequests([newReq, ...depositRequests]);
@@ -467,7 +519,7 @@ export default function App() {
       assignedUSDT: parseFloat((krw / 1350).toFixed(2)),
       assignedAddress: withdrawAddress,
       status: '대기중',
-      date: new Date().toISOString().replace('T', ' ').substring(0, 16)
+      date: getKSTDateString()
     };
 
     setDepositRequests([newReq, ...depositRequests]);
@@ -538,7 +590,7 @@ export default function App() {
         type: tradeType === 'buy' ? '매수' : '매도', 
         qty: qty, 
         price: currentNav, 
-        date: new Date().toISOString().replace('T', ' ').substring(0, 16), 
+        date: getKSTDateString(), 
         status: '체결완료' 
       },
       ...myTrades
@@ -1192,7 +1244,7 @@ export default function App() {
                         <td className="py-3 px-4 font-semibold text-slate-700">{req.type}</td>
                         <td className="py-3 px-4 font-bold text-slate-900">{req.amountKRW.toLocaleString()}원</td>
                         <td className="py-3 px-4 text-xs space-y-1">
-                          {req.type === 'USDT 예치(입금)' && req.status !== '승인완료' ? (
+                          {req.type === 'USDT 예치(입금)' && req.status === '대기중' ? (
                             <div className="space-y-1">
                               <input 
                                 type="number"
@@ -1228,12 +1280,21 @@ export default function App() {
                         <td className="py-3 px-4 text-right">
                           {req.status !== '승인완료' && (
                             req.type === 'USDT 예치(입금)' ? (
-                              <button 
-                                onClick={() => handleAdminSendDetails(req.id)}
-                                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
-                              >
-                                정보전송 및 승인
-                              </button>
+                              req.status === '대기중' ? (
+                                <button 
+                                  onClick={() => handleAdminSendDetails(req.id)}
+                                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
+                                >
+                                  입금 안내 정보 전송
+                                </button>
+                              ) : (
+                                <button 
+                                  onClick={() => handleAdminConfirmDeposit(req.id)}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
+                                >
+                                  입금 확인 및 잔고 충전 승인
+                                </button>
+                              )
                             ) : (
                               <button 
                                 onClick={() => handleApproveWithdraw(req.id)}
