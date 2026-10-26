@@ -37,17 +37,59 @@ export default function App() {
   const [signupId, setSignupId] = useState('');
   const [signupPw, setSignupPw] = useState('');
 
-  const [membersList, setMembersList] = useState(() => {
-    const saved = localStorage.getItem('xbtf_members');
-    return saved ? JSON.parse(saved) : [
-      { id: 'hong123', name: '홍길동', phone: '010-1234-5678', email: 'hong@example.com', status: '승인완료', role: 'member', balance: 15420000, holdings: 450 },
-      { id: 'kim_vip', name: '김철수', phone: '010-9876-5432', email: 'kim@example.com', status: '대기중', role: 'member', balance: 5000000, holdings: 0 },
-    ];
-  });
+  // 회원 목록 상태 (Supabase 연동)
+  const [membersList, setMembersList] = useState([
+    { id: 'hong123', name: '홍길동', phone: '010-1234-5678', email: 'hong@example.com', status: '승인완료', role: 'member', balance: 15420000, holdings: 450 },
+    { id: 'kim_vip', name: '김철수', phone: '010-9876-5432', email: 'kim@example.com', status: '대기중', role: 'member', balance: 5000000, holdings: 0 },
+  ]);
 
+  // Supabase에서 회원 데이터 불러오기
   useEffect(() => {
-    localStorage.setItem('xbtf_members', JSON.stringify(membersList));
-  }, [membersList]);
+    fetchMembersFromSupabase();
+  }, []);
+
+  const fetchMembersFromSupabase = async () => {
+    const { data, error } = await supabase
+      .from('xbtf')
+      .select('*');
+
+    if (error) {
+      console.error('회원 목록 불러오기 오류:', error.message);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      // Supabase의 xbtf 컬럼에 JSON 형태로 저장된 데이터를 파싱
+      const parsedMembers = data.map(item => {
+        try {
+          if (typeof item.xbtf === 'string') {
+            return JSON.parse(item.xbtf);
+          }
+          return item.xbtf;
+        } catch (e) {
+          return null;
+        }
+      }).filter(Boolean);
+
+      // 기본 샘플 데이터와 Supabase 데이터 병합 (중복 제거)
+      if (parsedMembers.length > 0) {
+        setMembersList(prev => {
+          const combined = [...prev];
+          parsedMembers.forEach(pm => {
+            if (!combined.some(m => m.id === pm.id)) {
+              combined.push({
+                ...pm,
+                role: 'member',
+                balance: pm.balance || 0,
+                holdings: pm.holdings || 0
+              });
+            }
+          });
+          return combined;
+        });
+      }
+    }
+  };
 
   // --- 펀드 및 대시보드 상태 관리 ---
   const [currentNav, setCurrentNav] = useState(33521.21);
@@ -205,7 +247,7 @@ export default function App() {
     }
   };
 
-  // --- 회원가입 신청 (Supabase 연동 추가 완료) ---
+  // --- 회원가입 신청 (Supabase 연동) ---
   const handleSignup = async (e) => {
     e.preventDefault();
     if (!signupName || !signupPhone || !signupEmail || !signupId || !signupPw) {
@@ -218,18 +260,23 @@ export default function App() {
       return;
     }
 
+    const newMemberData = {
+      id: signupId,
+      name: signupName,
+      phone: signupPhone,
+      email: signupEmail,
+      password: signupPw,
+      status: '대기중',
+      balance: 0,
+      holdings: 0
+    };
+
     // Supabase 'xbtf' 테이블에 데이터 저장
     const { error } = await supabase
       .from('xbtf')
       .insert([
         { 
-          xbtf: JSON.stringify({
-            id: signupId,
-            name: signupName,
-            phone: signupPhone,
-            email: signupEmail,
-            status: '대기중'
-          })
+          xbtf: JSON.stringify(newMemberData)
         }
       ]);
 
@@ -239,18 +286,7 @@ export default function App() {
       return;
     }
 
-    const newMember = { 
-      id: signupId, 
-      name: signupName, 
-      phone: signupPhone, 
-      email: signupEmail, 
-      status: '대기중', 
-      role: 'member', 
-      balance: 0, 
-      holdings: 0 
-    };
-
-    setMembersList([...membersList, newMember]);
+    setMembersList([...membersList, { ...newMemberData, role: 'member' }]);
     alert('회원가입 신청이 완료되었습니다! 관리자 승인 후 로그인하실 수 있습니다.');
     setSignupName('');
     setSignupPhone('');
@@ -1029,7 +1065,7 @@ export default function App() {
 
             {/* 회원가입 관리 및 승인 대기 목록 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">회원 가입 승인 관리</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-4">회원 가입 승인 관리 (Supabase 연동)</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
