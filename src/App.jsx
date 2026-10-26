@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
 import { 
   TrendingUp, TrendingDown, RefreshCw, Calendar, FileText, 
   User, Lock, CheckCircle, AlertCircle, ArrowUpRight, ArrowDownRight, 
@@ -204,8 +205,8 @@ export default function App() {
     }
   };
 
-  // --- 회원가입 신청 (이름, 휴대폰번호, 이메일, 아이디, 비밀번호) ---
-  const handleSignup = (e) => {
+  // --- 회원가입 신청 (Supabase 연동 추가 완료) ---
+  const handleSignup = async (e) => {
     e.preventDefault();
     if (!signupName || !signupPhone || !signupEmail || !signupId || !signupPw) {
       alert('모든 항목을 입력해주세요.');
@@ -214,6 +215,27 @@ export default function App() {
 
     if (membersList.some(m => m.id === signupId)) {
       alert('이미 존재하는 아이디입니다.');
+      return;
+    }
+
+    // Supabase 'xbtf' 테이블에 데이터 저장
+    const { error } = await supabase
+      .from('xbtf')
+      .insert([
+        { 
+          xbtf: JSON.stringify({
+            id: signupId,
+            name: signupName,
+            phone: signupPhone,
+            email: signupEmail,
+            status: '대기중'
+          })
+        }
+      ]);
+
+    if (error) {
+      console.error('Supabase 저장 오류:', error.message);
+      alert('회원가입 중 오류가 발생했습니다: ' + error.message);
       return;
     }
 
@@ -746,194 +768,205 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                <div className="text-xs text-slate-500 font-medium mb-1">총 평가금액</div>
-                <div className="text-2xl font-extrabold text-slate-900">
-                  {(activeMemberData.holdings * currentNav + activeMemberData.balance).toLocaleString()}원
-                </div>
-                <div className="text-xs text-emerald-600 mt-2 font-semibold">▲ 수익률 +24.8% (기준가 대비)</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div className="text-xs font-semibold text-slate-500 mb-1">보유 예수금 (KRW)</div>
+                <div className="text-2xl font-extrabold text-slate-900 mb-3">{activeMemberData.balance.toLocaleString()}원</div>
+                <div className="text-xs text-slate-400">USDT 환산: ${(activeMemberData.balance / 1350).toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
               </div>
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                <div className="text-xs text-slate-500 font-medium mb-1">보유 좌수 / 평가액</div>
-                <div className="text-2xl font-extrabold text-blue-600">{activeMemberData.holdings}좌</div>
-                <div className="text-xs text-slate-400 mt-2">평가액: {(activeMemberData.holdings * currentNav).toLocaleString()}원</div>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div className="text-xs font-semibold text-slate-500 mb-1">펀드 보유 좌수</div>
+                <div className="text-2xl font-extrabold text-blue-600 mb-3">{activeMemberData.holdings.toLocaleString()} 좌</div>
+                <div className="text-xs text-slate-400">평가금액: {(activeMemberData.holdings * currentNav).toLocaleString()}원</div>
               </div>
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                <div className="text-xs text-slate-500 font-medium mb-1">출금 가능 예수금</div>
-                <div className="text-2xl font-extrabold text-slate-900">{activeMemberData.balance.toLocaleString()}원</div>
-                <div className="text-xs text-slate-400 mt-2">즉시 출금 가능</div>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div className="text-xs font-semibold text-slate-500 mb-1">총 자산 평가액</div>
+                <div className="text-2xl font-extrabold text-emerald-600 mb-3">{(activeMemberData.balance + (activeMemberData.holdings * currentNav)).toLocaleString()}원</div>
+                <div className="text-xs text-slate-400">예수금 + 펀드 평가액 합산</div>
               </div>
             </div>
 
-            {/* 원화 금액 예치 신청 및 출금 신청 섹션 */}
+            {/* 모의 투자 및 입출금 영역 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 모의 투자 섹션 */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="flex items-center gap-2 font-bold text-slate-900 text-md mb-3">
-                  <Wallet className="w-5 h-5 text-blue-600" /> 투자금 예치 신청 (원화)
+                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                  <BarChart2 className="w-5 h-5 text-blue-600" /> 펀드 좌수 거래 (매수/매도)
                 </h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  예치할 원화 금액을 입력하고 신청해 주시면, 관리자가 확인 후 입금할 TRC20 지갑 주소와 USDT 수량을 안내해 드립니다.
-                </p>
-                <form onSubmit={handleDepositSubmit} className="space-y-4 pt-2">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">예치 신청 금액 (원화)</label>
-                    <input 
-                      type="number" 
-                      placeholder="예: 1350000" 
-                      value={depositKrwInput} 
-                      onChange={(e) => setDepositKrwInput(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                    />
-                  </div>
-                  <button 
-                    type="submit" 
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm shadow transition cursor-pointer"
-                  >
-                    입금 안내 요청하기
-                  </button>
-                </form>
-              </div>
-
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="flex items-center gap-2 font-bold text-slate-900 text-md mb-3">
-                  <ArrowUpRight className="w-5 h-5 text-rose-600" /> 투자금 출금 신청
-                </h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  보유 중인 예수금을 본인의 암호화폐 지갑(TRC20)으로 출금 신청합니다. 관리자 승인 후 처리됩니다.
-                </p>
-                <form onSubmit={handleWithdrawSubmit} className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">출금 신청 금액 (원화)</label>
-                    <input 
-                      type="number" 
-                      placeholder="예: 500000" 
-                      value={withdrawKrwInput} 
-                      onChange={(e) => setWithdrawKrwInput(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">수신 지갑 주소 (TRC20)</label>
-                    <input 
-                      type="text" 
-                      placeholder="받으실 USDT 지갑 주소 입력" 
-                      value={withdrawAddress} 
-                      onChange={(e) => setWithdrawAddress(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                    />
-                  </div>
-                  <button 
-                    type="submit" 
-                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-lg text-sm shadow transition cursor-pointer"
-                  >
-                    출금 신청하기
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            {/* 나의 입출금 신청 내역 및 안내 확인 */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-900 text-md mb-4">펀드 모의 매수·매도 주문</h3>
-                <div className="flex space-x-2 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => setTradeType('buy')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition cursor-pointer ${tradeType === 'buy' ? 'bg-blue-600 text-white shadow' : 'bg-slate-100 text-slate-600'}`}
-                  >
-                    매수하기
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTradeType('sell')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition cursor-pointer ${tradeType === 'sell' ? 'bg-rose-600 text-white shadow' : 'bg-slate-100 text-slate-600'}`}
-                  >
-                    매도하기
-                  </button>
-                </div>
-
                 <form onSubmit={handleTradeSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">적용 기준가</label>
-                    <input 
-                      type="text" 
-                      disabled 
-                      value={`${currentNav.toLocaleString()} 원 / 1좌`} 
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 font-bold" 
-                    />
+                  <div className="flex bg-slate-100 p-1 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setTradeType('buy')}
+                      className={`flex-1 py-2 text-sm font-bold rounded-md transition cursor-pointer ${tradeType === 'buy' ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                    >
+                      매수하기 (좌수 확보)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTradeType('sell')}
+                      className={`flex-1 py-2 text-sm font-bold rounded-md transition cursor-pointer ${tradeType === 'sell' ? 'bg-emerald-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                    >
+                      매도하기 (현금화)
+                    </button>
                   </div>
+
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">주문 수량 (좌)</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">거래 수량 (좌)</label>
                     <input 
-                      type="number" 
-                      placeholder="예: 50" 
-                      value={tradeAmount} 
+                      type="number"
+                      value={tradeAmount}
                       onChange={(e) => setTradeAmount(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      placeholder="매수/매도할 좌수 입력"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
-                  <div className="bg-slate-50 p-3 rounded-lg text-xs space-y-1 border border-slate-200">
+
+                  <div className="bg-slate-50 p-4 rounded-lg text-xs space-y-1 text-slate-600">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">예상 거래 금액:</span>
-                      <span className="font-bold text-slate-900">
-                        {tradeAmount ? (parseInt(tradeAmount || 0) * currentNav).toLocaleString() : 0} 원
-                      </span>
+                      <span>적용 기준가:</span>
+                      <span className="font-bold text-slate-900">{currentNav.toLocaleString()}원/좌</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>예상 총액:</span>
+                      <span className="font-bold text-slate-900">{((parseInt(tradeAmount) || 0) * currentNav).toLocaleString()}원</span>
                     </div>
                   </div>
+
                   <button 
-                    type="submit" 
-                    className={`w-full py-2.5 rounded-lg text-white font-bold text-sm shadow transition cursor-pointer ${tradeType === 'buy' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-rose-600 hover:bg-rose-700'}`}
+                    type="submit"
+                    className={`w-full font-bold py-2.5 rounded-lg text-sm transition text-white cursor-pointer ${tradeType === 'buy' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
                   >
                     {tradeType === 'buy' ? '매수 주문 실행' : '매도 주문 실행'}
                   </button>
                 </form>
+
+                <div className="mt-6">
+                  <h4 className="font-bold text-sm text-slate-900 mb-2">나의 거래 내역</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {myTrades.map((t) => (
+                      <div key={t.id} className="flex justify-between items-center text-xs p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] mr-2 ${t.type === '매수' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {t.type}
+                          </span>
+                          <span className="font-semibold text-slate-800">{t.qty}좌 ({t.price.toLocaleString()}원)</span>
+                        </div>
+                        <div className="text-right text-slate-500">
+                          <div>{t.date}</div>
+                          <span className="text-[10px] text-emerald-600 font-semibold">{t.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-900 text-md mb-4">나의 입출금 신청 및 안내 내역</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 bg-slate-50">
-                        <th className="py-3 px-4">구분</th>
-                        <th className="py-3 px-4">신청 금액</th>
-                        <th className="py-3 px-4 min-w-[220px]">관리자 안내 (지갑 주소 및 수량)</th>
-                        <th className="py-3 px-4">상태</th>
+              {/* 예치 및 출금 신청 섹션 */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-emerald-600" /> 투자금 예치 신청 (입금)
+                  </h3>
+                  <form onSubmit={handleDepositSubmit} className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">입금할 원화 금액 (KRW)</label>
+                      <input 
+                        type="number"
+                        value={depositKrwInput}
+                        onChange={(e) => setDepositKrwInput(e.target.value)}
+                        placeholder="예: 1000000"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+                    <button 
+                      type="submit"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-sm transition cursor-pointer"
+                    >
+                      예치 신청하기
+                    </button>
+                  </form>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+                    <Send className="w-5 h-5 text-purple-600" /> 출금 신청 (USDT 환전)
+                  </h3>
+                  <form onSubmit={handleWithdrawSubmit} className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">출금할 원화 금액 (KRW)</label>
+                      <input 
+                        type="number"
+                        value={withdrawKrwInput}
+                        onChange={(e) => setWithdrawKrwInput(e.target.value)}
+                        placeholder="출금할 원화 입력"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">수신 USDT 지갑 주소 (TRC20)</label>
+                      <input 
+                        type="text"
+                        value={withdrawAddress}
+                        onChange={(e) => setWithdrawAddress(e.target.value)}
+                        placeholder="지갑 주소를 입력하세요"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    </div>
+                    <button 
+                      type="submit"
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg text-sm transition cursor-pointer"
+                    >
+                      출금 신청하기
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            {/* 나의 입출금 신청 내역 현황 */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">나의 입출금 및 예치 신청 내역</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 bg-slate-50">
+                      <th className="py-3 px-4">신청 유형</th>
+                      <th className="py-3 px-4">금액(KRW) / USDT</th>
+                      <th className="py-3 px-4">입금 지갑 주소 / 안내</th>
+                      <th className="py-3 px-4">신청 일시</th>
+                      <th className="py-3 px-4">처리 상태</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {depositRequests.filter(r => r.memberId === currentUser.id).length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="py-6 text-center text-slate-400 text-xs">신청 내역이 없습니다.</td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
-                      {depositRequests.filter(r => r.memberId === currentUser.id).map((req) => (
-                        <tr key={req.id} className="hover:bg-slate-50 transition">
+                    ) : (
+                      depositRequests.filter(r => r.memberId === currentUser.id).map((req) => (
+                        <tr key={req.id} className="hover:bg-slate-50">
+                          <td className="py-3 px-4 font-semibold text-slate-800">{req.type}</td>
                           <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 text-xs font-bold rounded ${req.type.includes('예치') ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>
-                              {req.type}
-                            </span>
+                            <div className="font-bold text-slate-900">{req.amountKRW.toLocaleString()}원</div>
+                            {req.assignedUSDT > 0 && <div className="text-xs text-blue-600">{req.assignedUSDT} USDT</div>}
                           </td>
-                          <td className="py-3 px-4 font-bold text-slate-900">{req.amountKRW.toLocaleString()}원</td>
-                          <td className="py-3 px-4 text-xs text-slate-700">
-                            {req.status === '승인완료' ? (
-                              <div className="bg-slate-50 p-2 rounded border border-slate-200 space-y-1">
-                                <div className="font-bold text-blue-600">입금 USDT: {req.assignedUSDT} USDT</div>
-                                <div className="text-slate-600 break-all select-all font-mono bg-white p-1 rounded border border-slate-100">
-                                  주소: {req.assignedAddress}
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-amber-600 font-medium">관리자 확인 및 안내 대기 중...</span>
-                            )}
+                          <td className="py-3 px-4 text-xs text-slate-600 truncate max-w-xs">
+                            {req.assignedAddress || '관리자 확인 중'}
                           </td>
+                          <td className="py-3 px-4 text-xs text-slate-500">{req.date}</td>
                           <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 text-xs font-bold rounded ${req.status === '승인완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === '승인완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                               {req.status}
                             </span>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -942,339 +975,306 @@ export default function App() {
         {/* ================= 관리자 페이지 ================= */}
         {activeTab === 'admin' && currentUser?.role === 'admin' && (
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <span className="text-xs bg-purple-100 text-purple-700 font-semibold px-2.5 py-1 rounded-full">운영자 전용</span>
-                <h2 className="text-xl font-bold text-slate-900 mt-2">XBTF 플랫폼 관리자 대시보드</h2>
+                <span className="text-xs bg-purple-100 text-purple-700 font-semibold px-2.5 py-1 rounded-full">시스템 관리자 모드</span>
+                <h2 className="text-xl font-bold text-slate-900 mt-2">XBTF 플랫폼 통합 관리자 센터</h2>
               </div>
-              <Shield className="w-8 h-8 text-purple-600" />
+              <div className="text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                총 회원 수: <span className="font-bold text-slate-800">{membersList.length}명</span> | 대기 중인 신청: <span className="font-bold text-amber-600">{depositRequests.filter(r => r.status === '대기중').length}건</span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* 기준가 등록 카드 */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-900 text-md mb-4">신규 기준가 및 수익률 등록</h3>
-                <form onSubmit={handleAdminSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">적용 일자</label>
-                    <input 
-                      type="date" 
-                      value={newDateInput} 
-                      onChange={(e) => setNewDateInput(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">신규 기준가 (원)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      placeholder="예: 34100.50" 
-                      value={newPriceInput} 
-                      onChange={(e) => setNewPriceInput(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">일간 변동률 (%)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      placeholder="예: 2.15" 
-                      value={newChangeInput} 
-                      onChange={(e) => setNewChangeInput(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" 
-                    />
-                  </div>
-                  <button 
-                    type="submit" 
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-lg text-sm shadow transition cursor-pointer"
-                  >
-                    기준가 등록 및 실시간 반영
-                  </button>
-                </form>
+            {/* 관리자 기준가 등록 폼 */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">새로운 기준가격 공시 및 등록</h3>
+              <form onSubmit={handleAdminSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">공시 날짜</label>
+                  <input 
+                    type="date"
+                    value={newDateInput}
+                    onChange={(e) => setNewDateInput(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">새로운 기준가 (원)</label>
+                  <input 
+                    type="number"
+                    value={newPriceInput}
+                    onChange={(e) => setNewPriceInput(e.target.value)}
+                    placeholder="예: 34000"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">변동률 (%) 생략 가능</label>
+                  <input 
+                    type="text"
+                    value={newChangeInput}
+                    onChange={(e) => setNewChangeInput(e.target.value)}
+                    placeholder="예: 4.25"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm transition cursor-pointer"
+                >
+                  기준가 등록 반영
+                </button>
+              </form>
+            </div>
+
+            {/* 회원가입 관리 및 승인 대기 목록 */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">회원 가입 승인 관리</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 bg-slate-50">
+                      <th className="py-3 px-4">아이디</th>
+                      <th className="py-3 px-4">이름</th>
+                      <th className="py-3 px-4">연락처</th>
+                      <th className="py-3 px-4">이메일</th>
+                      <th className="py-3 px-4">승인 상태</th>
+                      <th className="py-3 px-4 text-right">관리 작업</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {membersList.map((m) => (
+                      <tr key={m.id} className="hover:bg-slate-50">
+                        <td className="py-3 px-4 font-bold text-slate-800">{m.id}</td>
+                        <td className="py-3 px-4">{m.name}</td>
+                        <td className="py-3 px-4 text-xs text-slate-600">{m.phone}</td>
+                        <td className="py-3 px-4 text-xs text-slate-600">{m.email}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${m.status === '승인완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {m.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {m.status === '대기중' && (
+                            <button 
+                              onClick={() => handleApproveMember(m.id)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-bold transition cursor-pointer"
+                            >
+                              승인하기
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+            </div>
 
-              {/* 입출금 신청 및 답변/승인 관리 카드 */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                  <h3 className="font-bold text-slate-900 text-md mb-3">회원 투자금 예치 및 출금 요청 관리</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 bg-slate-50">
-                          <th className="py-2.5 px-3">회원명</th>
-                          <th className="py-2.5 px-3">요청 유형</th>
-                          <th className="py-2.5 px-3">신청 금액</th>
-                          <th className="py-2.5 px-3 min-w-[240px]">관리자 답변 입력 (지갑주소 & USDT)</th>
-                          <th className="py-2.5 px-3 text-right">처리</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-sm">
-                        {depositRequests.map((req) => (
-                          <tr key={req.id} className="hover:bg-slate-50">
-                            <td className="py-2.5 px-3 font-bold text-slate-900">{req.memberName}</td>
-                            <td className="py-2.5 px-3">
-                              <span className={`px-2 py-0.5 text-xs font-bold rounded ${req.type.includes('예치') ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>
-                                {req.type}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-xs font-semibold">{req.amountKRW.toLocaleString()}원</td>
-                            <td className="py-2.5 px-3 text-xs">
-                              {req.status === '대기중' && req.type.includes('예치') ? (
-                                <div className="space-y-1.5 py-1">
-                                  <input 
-                                    type="number" 
-                                    step="0.01"
-                                    placeholder="입금받을 USDT 수량" 
-                                    onChange={(e) => setAdminInputData({
-                                      ...adminInputData, 
-                                      [req.id]: { ...(adminInputData[req.id] || {}), usdt: e.target.value }
-                                    })}
-                                    className="w-full border border-slate-300 rounded px-2 py-1 text-xs"
-                                  />
-                                  <input 
-                                    type="text" 
-                                    placeholder="입금받을 TRC20 지갑 주소" 
-                                    onChange={(e) => setAdminInputData({
-                                      ...adminInputData, 
-                                      [req.id]: { ...(adminInputData[req.id] || {}), address: e.target.value }
-                                    })}
-                                    className="w-full border border-slate-300 rounded px-2 py-1 text-xs"
-                                  />
-                                </div>
-                              ) : (
-                                <div className="text-slate-700 break-all">
-                                  <span className="font-bold text-blue-600">{req.assignedUSDT} USDT</span> / <span className="font-mono text-[11px]">{req.assignedAddress}</span>
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              {req.status === '대기중' ? (
-                                req.type.includes('예치') ? (
-                                  <button 
-                                    onClick={() => handleAdminSendDetails(req.id)}
-                                    className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded font-semibold transition cursor-pointer flex items-center gap-1 ml-auto"
-                                  >
-                                    <Send className="w-3 h-3" /> 답변 및 승인
-                                  </button>
-                                ) : (
-                                  <button 
-                                    onClick={() => handleApproveWithdraw(req.id)}
-                                    className="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-1.5 rounded font-semibold transition cursor-pointer ml-auto"
-                                  >
-                                    출금 승인
-                                  </button>
-                                )
-                              ) : (
-                                <span className="text-xs text-emerald-600 font-bold">완료됨</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* 회원 가입 승인 관리 테이블 (연락처 및 이메일도 표시) */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                  <h3 className="font-bold text-slate-900 text-md mb-3">신규 회원 가입 승인 관리</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 bg-slate-50">
-                          <th className="py-2.5 px-3">이름 / 아이디</th>
-                          <th className="py-2.5 px-3">휴대폰 번호</th>
-                          <th className="py-2.5 px-3">이메일</th>
-                          <th className="py-2.5 px-3">상태</th>
-                          <th className="py-2.5 px-3 text-right">가입 승인</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-sm">
-                        {membersList.map((m) => (
-                          <tr key={m.id} className="hover:bg-slate-50">
-                            <td className="py-2.5 px-3">
-                              <span className="font-bold text-slate-900 block">{m.name}</span>
-                              <span className="text-xs text-slate-400 font-medium">({m.id})</span>
-                            </td>
-                            <td className="py-2.5 px-3 text-xs text-slate-700 font-mono">{m.phone || '-'}</td>
-                            <td className="py-2.5 px-3 text-xs text-slate-700">{m.email || '-'}</td>
-                            <td className="py-2.5 px-3">
-                              <span className={`px-2 py-0.5 text-xs font-bold rounded ${m.status === '승인완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                {m.status}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              {m.status === '대기중' ? (
-                                <button 
-                                  onClick={() => handleApproveMember(m.id)}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded font-semibold transition cursor-pointer"
-                                >
-                                  승인하기
-                                </button>
-                              ) : (
-                                <span className="text-xs text-slate-400 font-medium">승인됨</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+            {/* 입출금 신청 관리 목록 */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <h3 className="text-lg font-bold text-slate-900 mb-4">회원 입출금 / 예치 신청 처리</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 bg-slate-50">
+                      <th className="py-3 px-4">신청 회원</th>
+                      <th className="py-3 px-4">유형</th>
+                      <th className="py-3 px-4">신청 금액</th>
+                      <th className="py-3 px-4">안내 지갑 및 USDT 설정</th>
+                      <th className="py-3 px-4">상태</th>
+                      <th className="py-3 px-4 text-right">조치</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {depositRequests.map((req) => (
+                      <tr key={req.id} className="hover:bg-slate-50">
+                        <td className="py-3 px-4 font-bold text-slate-800">{req.memberName} ({req.memberId})</td>
+                        <td className="py-3 px-4 font-semibold text-slate-700">{req.type}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900">{req.amountKRW.toLocaleString()}원</td>
+                        <td className="py-3 px-4 text-xs space-y-1">
+                          {req.type === 'USDT 예치(입금)' && req.status !== '승인완료' ? (
+                            <div className="space-y-1">
+                              <input 
+                                type="number"
+                                placeholder="USDT 수량"
+                                onChange={(e) => setAdminInputData({
+                                  ...adminInputData, 
+                                  [req.id]: { ...(adminInputData[req.id] || {}), usdt: e.target.value }
+                                })}
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs"
+                              />
+                              <input 
+                                type="text"
+                                placeholder="입금 받을 지갑 주소"
+                                onChange={(e) => setAdminInputData({
+                                  ...adminInputData, 
+                                  [req.id]: { ...(adminInputData[req.id] || {}), address: e.target.value }
+                                })}
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs"
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="font-semibold">{req.assignedUSDT} USDT</div>
+                              <div className="text-slate-400 truncate max-w-xs">{req.assignedAddress}</div>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${req.status === '승인완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {req.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {req.status !== '승인완료' && (
+                            req.type === 'USDT 예치(입금)' ? (
+                              <button 
+                                onClick={() => handleAdminSendDetails(req.id)}
+                                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
+                              >
+                                정보전송 및 승인
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => handleApproveWithdraw(req.id)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer"
+                              >
+                                출금 최종승인
+                              </button>
+                            )
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
 
-      </main>
-
-      {/* ================= 로그인 모달 ================= */}
-      {authModal === 'login' && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-bold text-slate-900">로그인</h3>
-              <button onClick={() => setAuthModal(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">아이디</label>
-                <input 
-                  type="text" 
-                  placeholder="아이디 입력" 
-                  value={loginId} 
-                  onChange={(e) => setLoginId(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">비밀번호</label>
-                <input 
-                  type="password" 
-                  placeholder="비밀번호 입력" 
-                  value={loginPw} 
-                  onChange={(e) => setLoginPw(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                />
-              </div>
+        {/* ================= 로그인 모달 ================= */}
+        {authModal === 'login' && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-fadeIn">
               <button 
-                type="submit" 
-                className="w-full bg-blue-600 hover:bg-blue-750 text-white font-bold py-2.5 rounded-lg text-sm shadow transition cursor-pointer mt-2"
+                onClick={() => setAuthModal(null)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
-                로그인하기
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ================= 회원가입 모달 (이름, 휴대폰번호, 이메일, 아이디, 비밀번호) ================= */}
-      {authModal === 'signup' && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-bold text-slate-900">회원가입 신청</h3>
-              <button onClick={() => setAuthModal(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
-            </div>
-            <form onSubmit={handleSignup} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">이름</label>
-                <input 
-                  type="text" 
-                  placeholder="예: 홍길동" 
-                  value={signupName} 
-                  onChange={(e) => setSignupName(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">휴대폰 번호</label>
-                <input 
-                  type="tel" 
-                  placeholder="예: 010-1234-5678" 
-                  value={signupPhone} 
-                  onChange={(e) => setSignupPhone(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">이메일 주소</label>
-                <input 
-                  type="email" 
-                  placeholder="예: user@example.com" 
-                  value={signupEmail} 
-                  onChange={(e) => setSignupEmail(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">아이디</label>
-                <input 
-                  type="text" 
-                  placeholder="사용할 아이디 입력" 
-                  value={signupId} 
-                  onChange={(e) => setSignupId(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">비밀번호</label>
-                <input 
-                  type="password" 
-                  placeholder="사용할 비밀번호 입력" 
-                  value={signupPw} 
-                  onChange={(e) => setSignupPw(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                />
-              </div>
-              <p className="text-xs text-slate-500 pt-1">
-                ℹ️ 회원가입 신청 후 관리자의 승인이 완료되면 마이페이지 이용이 가능합니다.
-              </p>
-              <button 
-                type="submit" 
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-sm shadow transition cursor-pointer mt-2"
-              >
-                가입 신청하기
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ================= [더보기] 모달 창 ================= */}
-      {showMoreModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-bold text-slate-900">전체 기준가 내역</h3>
-              <button onClick={() => setShowMoreModal(false)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
-              {historyList.map((item, index) => (
-                <div key={index} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs sm:text-sm">
-                  <span className="font-semibold text-slate-700">{item.date}</span>
-                  <span className="font-bold text-slate-900">{item.price.toLocaleString()}원</span>
-                  <span className="font-semibold text-emerald-600">{item.change}</span>
+              <h3 className="text-xl font-bold text-slate-900 mb-1">로그인</h3>
+              <p className="text-xs text-slate-500 mb-6">XBTF 플랫폼에 오신 것을 환영합니다.</p>
+              
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">아이디</label>
+                  <input 
+                    type="text" 
+                    value={loginId} 
+                    onChange={(e) => setLoginId(e.target.value)} 
+                    placeholder="아이디를 입력하세요" 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
                 </div>
-              ))}
-            </div>
-            <div className="mt-6 pt-3 border-t border-slate-100 text-right">
-              <button onClick={() => setShowMoreModal(false)} className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 rounded-xl text-xs font-bold cursor-pointer">
-                닫기
-              </button>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">비밀번호</label>
+                  <input 
+                    type="password" 
+                    value={loginPw} 
+                    onChange={(e) => setLoginPw(e.target.value)} 
+                    placeholder="비밀번호를 입력하세요" 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm transition cursor-pointer mt-2"
+                >
+                  로그인
+                </button>
+              </form>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
+        {/* ================= 회원가입 모달 ================= */}
+        {authModal === 'signup' && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-fadeIn">
+              <button 
+                onClick={() => setAuthModal(null)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h3 className="text-xl font-bold text-slate-900 mb-1">회원가입 신청</h3>
+              <p className="text-xs text-slate-500 mb-4">정보를 입력하시면 관리자 승인 후 이용 가능합니다.</p>
+              
+              <form onSubmit={handleSignup} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">이름</label>
+                  <input 
+                    type="text" 
+                    value={signupName} 
+                    onChange={(e) => setSignupName(e.target.value)} 
+                    placeholder="실명을 입력하세요" 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">휴대폰 번호</label>
+                  <input 
+                    type="text" 
+                    value={signupPhone} 
+                    onChange={(e) => setSignupPhone(e.target.value)} 
+                    placeholder="010-0000-0000" 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">이메일</label>
+                  <input 
+                    type="email" 
+                    value={signupEmail} 
+                    onChange={(e) => setSignupEmail(e.target.value)} 
+                    placeholder="example@email.com" 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">아이디</label>
+                  <input 
+                    type="text" 
+                    value={signupId} 
+                    onChange={(e) => setSignupId(e.target.value)} 
+                    placeholder="사용할 아이디" 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">비밀번호</label>
+                  <input 
+                    type="password" 
+                    value={signupPw} 
+                    onChange={(e) => setSignupPw(e.target.value)} 
+                    placeholder="비밀번호" 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-sm transition cursor-pointer mt-3"
+                >
+                  가입 신청하기
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+      </main>
     </div>
   );
 }
