@@ -158,9 +158,7 @@ export default function App() {
     ]
   };
 
-  // 9월 26일(9월 28일) 이전 과거 기준가를 조정하여 +68.32% 수익률 역산 맞춤[cite: 7]
   const [historyList, setHistoryList] = useState([
-    // --- 9월 26일 ~ 10월 26일 (기존 수치 완전 유지) ---
     { date: '2026.10.26', price: 33521.21, change: '+4.70%' },
     { date: '2026.10.23', price: 32029.15, change: '+3.78%' },
     { date: '2026.10.22', price: 30857.13, change: '+3.41%' },
@@ -180,9 +178,7 @@ export default function App() {
     { date: '2026.10.01', price: 24486.00, change: '-0.90%' },
     { date: '2026.09.30', price: 24708.00, change: '+2.05%' },
     { date: '2026.09.29', price: 24212.00, change: '+1.50%' },
-
-    // --- 9월 26일 이전 과거 가격 재조정 (+68.32%에 정확히 도달하도록 계산)[cite: 7] ---
-    { date: '2026.09.28', price: 19915.17, change: '-1.20%' }, // (33,521.21 / 1.6832 = 19,915.17)[cite: 7]
+    { date: '2026.09.28', price: 19915.17, change: '-1.20%' }, //[cite: 7]
     { date: '2026.09.25', price: 20157.05, change: '+1.75%' },
     { date: '2026.09.24', price: 19810.37, change: '+2.10%' },
     { date: '2026.09.23', price: 19402.91, change: '+1.30%' },
@@ -211,13 +207,11 @@ export default function App() {
     { date: '2026.07주차 (09.29 ~ 10.05)', price: 23400.00, change: '+5.20%' },
   ];
 
-  // 월별 내역도 상단 월간 수익률인 +68.32%와 완전 일치시킴[cite: 7]
   const monthlyHistoryList = [
     { date: '2026년 10월 마감', price: 33521.21, change: '+68.32%' }, //[cite: 7]
     { date: '2026년 9월 마감', price: 24708.00, change: '+24.07%' },
   ];
 
-  // 소수점 둘째 자리 포맷팅 함수
   const formatPrice = (price) => {
     return Number(price).toLocaleString(undefined, {
       minimumFractionDigits: 2,
@@ -225,7 +219,6 @@ export default function App() {
     });
   };
 
-  // 페이지네이션 및 탭별 데이터 분기 처리
   const getCurrentTableData = () => {
     if (perfTab === 'weekly') return weeklyHistoryList;
     if (perfTab === 'monthly') return monthlyHistoryList;
@@ -257,7 +250,7 @@ export default function App() {
   const [newPriceInput, setNewPriceInput] = useState('');
   const [newChangeInput, setNewChangeInput] = useState('');
   const [auditLogs, setAuditLogs] = useState([
-    { id: 1, admin: 'admin', action: '기준가 등록 (33,521.21원)', time: '2026.10.26 09:00' },
+    { id: 1, admin: 'oking1234', action: '기준가 등록 (33,521.21원)', time: '2026.10.26 09:00' },
   ]);
 
   const getKSTDateString = () => {
@@ -273,8 +266,9 @@ export default function App() {
       return;
     }
 
-    if (loginId === 'admin' && loginPw === 'admin1234') {
-      setCurrentUser({ id: 'admin', name: '플랫폼 관리자', role: 'admin' });
+    // 관리자 로그인 정보 변경 완료 (oking1234 / asd123asd!)
+    if (loginId === 'oking1234' && loginPw === 'asd123asd!') {
+      setCurrentUser({ id: 'oking1234', name: '플랫폼 관리자', role: 'admin' });
       setAuthModal(null);
       setActiveTab('admin');
       fetchDataFromSupabase();
@@ -566,7 +560,7 @@ export default function App() {
     ]);
 
     setAuditLogs([
-      { id: Date.now(), admin: currentUser?.id || 'admin', action: `기준가 업데이트 (${formatPrice(p)}원)`, time: `${formattedDate} 15:30` },
+      { id: Date.now(), admin: currentUser?.id || 'oking1234', action: `기준가 업데이트 (${formatPrice(p)}원)`, time: `${formattedDate} 15:30` },
       ...auditLogs
     ]);
 
@@ -1457,7 +1451,7 @@ export default function App() {
                   <input type="email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} placeholder="email@example.com" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">아이디</label>
+                  <label className="block text-xs font-semibold text-slate-700 unsafely mb-1">아이디</label>
                   <input type="text" value={signupId} onChange={(e) => setSignupId(e.target.value)} placeholder="아이디" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
