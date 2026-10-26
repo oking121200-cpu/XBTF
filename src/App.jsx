@@ -44,7 +44,7 @@ export default function App() {
 
   const [depositRequests, setDepositRequests] = useState([]);
 
-  // Supabase에서 데이터 불러오기
+  // Supabase에서 데이터 불러오기 (중복 제거 및 최신 상태 반영)
   const fetchDataFromSupabase = async () => {
     const { data, error } = await supabase
       .from('xbtf')
@@ -57,7 +57,7 @@ export default function App() {
 
     if (data && data.length > 0) {
       const parsedMembers = [];
-      const loadedRequests = [];
+      const requestMap = new Map(); // id 기준으로 중복 방지
 
       data.forEach(item => {
         try {
@@ -67,7 +67,8 @@ export default function App() {
           }
           if (parsed) {
             if (parsed.type === 'USDT 예치(입금)' || parsed.type === '출금신청') {
-              loadedRequests.push(parsed);
+              // 최신 상태 우선 반영을 위해 맵에 저장 (동일 id면 덮어쓰기)
+              requestMap.set(parsed.id, parsed);
             } else {
               if (Array.isArray(parsed)) {
                 parsedMembers.push(...parsed);
@@ -81,9 +82,7 @@ export default function App() {
         }
       });
 
-      if (loadedRequests.length > 0) {
-        setDepositRequests(loadedRequests);
-      }
+      setDepositRequests(Array.from(requestMap.values()));
 
       setMembersList(prev => {
         const map = new Map();
@@ -322,7 +321,7 @@ export default function App() {
 
     if (targetRow && updatedMemberData) {
       const updatePayload = { xbtf: JSON.stringify(updatedMemberData) };
-      if (targetRow.created_at) updatePayload.created_at = targetRow.created_at;
+      if (targetRow.id) updatePayload.id = targetRow.id;
 
       const { error: updateError } = await supabase.from('xbtf').upsert(updatePayload);
       if (updateError) {
@@ -336,6 +335,7 @@ export default function App() {
     fetchDataFromSupabase();
   };
 
+  // --- 기존 행을 찾아 업데이트하도록 수정된 관리자 입금 안내 전송 함수 ---
   const handleAdminSendDetails = async (reqId) => {
     const input = adminInputData[reqId] || {};
     const usdt = parseFloat(input.usdt);
@@ -359,7 +359,7 @@ export default function App() {
           if (typeof parsed === 'string') parsed = JSON.parse(parsed);
           if (parsed && parsed.id === targetReq.id) {
             const updatePayload = { xbtf: JSON.stringify(updatedReq) };
-            if (row.created_at) updatePayload.created_at = row.created_at;
+            if (row.id) updatePayload.id = row.id;
             await supabase.from('xbtf').upsert(updatePayload);
             break;
           }
@@ -372,6 +372,7 @@ export default function App() {
     fetchDataFromSupabase();
   };
 
+  // --- 기존 행을 찾아 업데이트하도록 수정된 관리자 입금 승인 함수 ---
   const handleAdminConfirmDeposit = async (reqId) => {
     const targetReq = depositRequests.find(r => r.id === reqId);
     if (!targetReq || targetReq.status === '승인완료') return;
@@ -386,16 +387,20 @@ export default function App() {
         try {
           let parsed = row.xbtf;
           if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          
+          // 입금 요청건 업데이트 (새로 insert 하지 않고 기존 행 덮어쓰기)
           if (parsed && parsed.id === targetReq.id) {
             const updatePayload = { xbtf: JSON.stringify(updatedReq) };
-            if (row.created_at) updatePayload.created_at = row.created_at;
+            if (row.id) updatePayload.id = row.id;
             await supabase.from('xbtf').upsert(updatePayload);
           }
+          
+          // 회원 잔고 업데이트
           if (parsed && parsed.id === memberId) {
             const currentBal = parsed.balance || 0;
             const updatedMember = { ...parsed, balance: currentBal + addAmount };
             const updatePayload = { xbtf: JSON.stringify(updatedMember) };
-            if (row.created_at) updatePayload.created_at = row.created_at;
+            if (row.id) updatePayload.id = row.id;
             await supabase.from('xbtf').upsert(updatePayload);
           }
         } catch (e) {}
@@ -409,27 +414,39 @@ export default function App() {
     fetchDataFromSupabase();
   };
 
-  const handleApproveWithdraw = (reqId) => {
+  const handleApproveWithdraw = async (reqId) => {
     const targetReq = depositRequests.find(r => r.id === reqId);
     if (!targetReq || targetReq.status === '승인완료') return;
 
-    setMembersList(membersList.map(m => {
-      if (m.id === targetReq.memberId) {
-        if (m.balance < targetReq.amountKRW) {
-          alert('회원의 예수금이 부족하여 출금을 승인할 수 없습니다.');
-          return m;
-        }
-        const newBal = m.balance - targetReq.amountKRW;
-        if (currentUser && currentUser.id === m.id) {
-          setCurrentUser(prev => ({ ...prev, balance: newBal }));
-        }
-        return { ...m, balance: newBal };
-      }
-      return m;
-    }));
+    const updatedReq = { ...targetReq, status: '승인완료' };
+    const memberId = targetReq.memberId;
 
-    setDepositRequests(depositRequests.map(r => r.id === reqId ? { ...r, status: '승인완료' } : r));
+    const { data: allRows } = await supabase.from('xbtf').select('*');
+    if (allRows) {
+      for (let row of allRows) {
+        try {
+          let parsed = row.xbtf;
+          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          if (parsed && parsed.id === targetReq.id) {
+            const updatePayload = { xbtf: JSON.stringify(updatedReq) };
+            if (row.id) updatePayload.id = row.id;
+            await supabase.from('xbtf').upsert(updatePayload);
+          }
+          if (parsed && parsed.id === memberId) {
+            const currentBal = parsed.balance || 0;
+            const updatedMember = { ...parsed, balance: currentBal - targetReq.amountKRW };
+            const updatePayload = { xbtf: JSON.stringify(updatedMember) };
+            if (row.id) updatePayload.id = row.id;
+            await supabase.from('xbtf').upsert(updatePayload);
+          }
+        } catch (e) {}
+      }
+    }
+
+    setMembersList(membersList.map(m => m.id === memberId ? { ...m, balance: m.balance - targetReq.amountKRW } : m));
+    setDepositRequests(depositRequests.map(r => r.id === reqId ? updatedReq : r));
     alert('출금 신청이 최종 승인 처리되었습니다.');
+    fetchDataFromSupabase();
   };
 
   const handleDepositSubmit = async (e) => {
