@@ -119,8 +119,67 @@ export default function App() {
   const [currentNav, setCurrentNav] = useState(33521.21);
   const [dailyReturn, setDailyReturn] = useState(4.70);
   const [weeklyReturn, setWeeklyReturn] = useState(17.83);
-  const [monthlyReturn, setMonthlyReturn] = useState(68.32); // 30일 기준 +68.32% 고정[cite: 7]
-  
+  const [monthlyReturn, setMonthlyReturn] = useState(68.32);
+
+  const [historyList, setHistoryList] = useState([
+    { date: '2026.10.26', price: 33521.21, change: '+4.70%' },
+    { date: '2026.10.23', price: 32029.15, change: '+3.78%' },
+    { date: '2026.10.22', price: 30857.13, change: '+3.41%' },
+    { date: '2026.10.21', price: 29841.27, change: '+2.95%' },
+    { date: '2026.10.20', price: 28991.45, change: '+3.12%' },
+    { date: '2026.10.19', price: 28111.32, change: '+2.48%' },
+    { date: '2026.10.16', price: 27430.00, change: '-0.85%' },
+    { date: '2026.10.15', price: 27665.00, change: '+1.90%' },
+    { date: '2026.10.14', price: 27148.00, change: '+2.10%' },
+    { date: '2026.10.13', price: 26590.00, change: '+1.45%' },
+    { date: '2026.10.12', price: 26210.00, change: '-1.10%' },
+    { date: '2026.10.08', price: 26500.00, change: '+2.20%' },
+    { date: '2026.10.07', price: 25930.00, change: '-0.75%' },
+    { date: '2026.10.06', price: 26125.00, change: '+3.10%' },
+    { date: '2026.10.05', price: 25340.00, change: '+1.80%' },
+    { date: '2026.10.02', price: 24890.00, change: '+1.65%' },
+    { date: '2026.10.01', price: 24486.00, change: '-0.90%' },
+    { date: '2026.09.30', price: 24708.00, change: '+2.05%' },
+    { date: '2026.09.29', price: 24212.00, change: '+1.50%' },
+    { date: '2026.09.28', price: 19915.17, change: '-1.20%' },
+    { date: '2026.09.25', price: 20157.05, change: '+1.75%' },
+    { date: '2026.09.24', price: 19810.37, change: '+2.10%' },
+    { date: '2026.09.23', price: 19402.91, change: '+1.30%' },
+    { date: '2026.09.22', price: 19153.91, change: '-0.65%' },
+    { date: '2026.09.21', price: 19279.22, change: '+2.20%' },
+    { date: '2026.09.18', price: 18864.21, change: '+1.90%' },
+    { date: '2026.09.17', price: 18512.47, change: '+1.45%' },
+    { date: '2026.09.16', price: 18247.88, change: '-1.10%' },
+    { date: '2026.09.15', price: 18450.84, change: '+2.15%' },
+    { date: '2026.09.14', price: 18062.50, change: '+1.80%' },
+    { date: '2026.09.11', price: 17743.12, change: '+1.20%' },
+    { date: '2026.09.10', price: 17532.73, change: '-0.80%' },
+    { date: '2026.09.09', price: 17674.12, change: '+2.05%' },
+    { date: '2026.09.08', price: 17319.08, change: '+1.60%' },
+    { date: '2026.09.07', price: 17046.34, change: '+1.35%' },
+    { date: '2026.09.04', price: 16819.28, change: '-0.50%' },
+    { date: '2026.09.03', price: 16903.80, change: '+1.80%' },
+    { date: '2026.09.02', price: 16604.91, change: '-0.40%' },
+    { date: '2026.09.01', price: 16671.60, change: '+1.50%' },
+  ]);
+
+  // --- 기준가 또는 히스토리가 바뀔 때 주간/월간 수익률 자동 연동 계산 ---
+  useEffect(() => {
+    if (historyList && historyList.length > 1) {
+      // 주간 수익률: 약 5거래일 전 가격 대비 현재가 변동률 계산
+      const weekIndex = Math.min(5, historyList.length - 1);
+      const prevWeekPrice = historyList[weekIndex].price;
+      const wRet = ((currentNav - prevWeekPrice) / prevWeekPrice) * 100;
+      setWeeklyReturn(parseFloat(wRet.toFixed(2)));
+
+      // 월간 수익률: 9월 28일(30일 기준 시작점) 가격 대비 현재가 변동률 계산
+      const baseMonthItem = historyList.find(h => h.date === '2026.09.28') || historyList[historyList.length - 1];
+      const baseMonthPrice = baseMonthItem.price;
+      const mRet = ((currentNav - baseMonthPrice) / baseMonthPrice) * 100;
+      setMonthlyReturn(parseFloat(mRet.toFixed(2)));
+    }
+  }, [currentNav, historyList]);
+
   const [lastUpdated, setLastUpdated] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -158,57 +217,15 @@ export default function App() {
     ]
   };
 
-  const [historyList, setHistoryList] = useState([
-    { date: '2026.10.26', price: 33521.21, change: '+4.70%' },
-    { date: '2026.10.23', price: 32029.15, change: '+3.78%' },
-    { date: '2026.10.22', price: 30857.13, change: '+3.41%' },
-    { date: '2026.10.21', price: 29841.27, change: '+2.95%' },
-    { date: '2026.10.20', price: 28991.45, change: '+3.12%' },
-    { date: '2026.10.19', price: 28111.32, change: '+2.48%' },
-    { date: '2026.10.16', price: 27430.00, change: '-0.85%' },
-    { date: '2026.10.15', price: 27665.00, change: '+1.90%' },
-    { date: '2026.10.14', price: 27148.00, change: '+2.10%' },
-    { date: '2026.10.13', price: 26590.00, change: '+1.45%' },
-    { date: '2026.10.12', price: 26210.00, change: '-1.10%' },
-    { date: '2026.10.08', price: 26500.00, change: '+2.20%' },
-    { date: '2026.10.07', price: 25930.00, change: '-0.75%' },
-    { date: '2026.10.06', price: 26125.00, change: '+3.10%' },
-    { date: '2026.10.05', price: 25340.00, change: '+1.80%' },
-    { date: '2026.10.02', price: 24890.00, change: '+1.65%' },
-    { date: '2026.10.01', price: 24486.00, change: '-0.90%' },
-    { date: '2026.09.30', price: 24708.00, change: '+2.05%' },
-    { date: '2026.09.29', price: 24212.00, change: '+1.50%' },
-    { date: '2026.09.28', price: 19915.17, change: '-1.20%' }, //[cite: 7]
-    { date: '2026.09.25', price: 20157.05, change: '+1.75%' },
-    { date: '2026.09.24', price: 19810.37, change: '+2.10%' },
-    { date: '2026.09.23', price: 19402.91, change: '+1.30%' },
-    { date: '2026.09.22', price: 19153.91, change: '-0.65%' },
-    { date: '2026.09.21', price: 19279.22, change: '+2.20%' },
-    { date: '2026.09.18', price: 18864.21, change: '+1.90%' },
-    { date: '2026.09.17', price: 18512.47, change: '+1.45%' },
-    { date: '2026.09.16', price: 18247.88, change: '-1.10%' },
-    { date: '2026.09.15', price: 18450.84, change: '+2.15%' },
-    { date: '2026.09.14', price: 18062.50, change: '+1.80%' },
-    { date: '2026.09.11', price: 17743.12, change: '+1.20%' },
-    { date: '2026.09.10', price: 17532.73, change: '-0.80%' },
-    { date: '2026.09.09', price: 17674.12, change: '+2.05%' },
-    { date: '2026.09.08', price: 17319.08, change: '+1.60%' },
-    { date: '2026.09.07', price: 17046.34, change: '+1.35%' },
-    { date: '2026.09.04', price: 16819.28, change: '-0.50%' },
-    { date: '2026.09.03', price: 16903.80, change: '+1.80%' },
-    { date: '2026.09.02', price: 16604.91, change: '-0.40%' },
-    { date: '2026.09.01', price: 16671.60, change: '+1.50%' },
-  ]);
-
   const weeklyHistoryList = [
-    { date: '2026.10주차 (10.20 ~ 10.26)', price: 33521.21, change: '+17.83%' },
+    { date: '2026.10주차 (10.20 ~ 10.26)', price: 33521.21, change: `+${weeklyReturn}%` },
     { date: '2026.09주차 (10.13 ~ 10.19)', price: 28450.00, change: '+12.40%' },
     { date: '2026.08주차 (10.06 ~ 10.12)', price: 25300.00, change: '+8.15%' },
     { date: '2026.07주차 (09.29 ~ 10.05)', price: 23400.00, change: '+5.20%' },
   ];
 
   const monthlyHistoryList = [
-    { date: '2026년 10월 마감', price: 33521.21, change: '+68.32%' }, //[cite: 7]
+    { date: '2026년 10월 마감', price: 33521.21, change: `+${monthlyReturn}%` },[cite: 7, 9]
     { date: '2026년 9월 마감', price: 24708.00, change: '+24.07%' },
   ];
 
@@ -266,7 +283,6 @@ export default function App() {
       return;
     }
 
-    // 관리자 로그인 정보 변경 완료 (oking1234 / asd123asd!)
     if (loginId === 'oking1234' && loginPw === 'asd123asd!') {
       setCurrentUser({ id: 'oking1234', name: '플랫폼 관리자', role: 'admin' });
       setAuthModal(null);
@@ -551,11 +567,20 @@ export default function App() {
     if (!newPriceInput) return;
     const p = parseFloat(newPriceInput);
     setCurrentNav(p);
-    if (newChangeInput) setDailyReturn(parseFloat(newChangeInput));
+
+    if (newChangeInput) {
+      setDailyReturn(parseFloat(newChangeInput));
+    } else if (historyList.length > 0) {
+      const prevPrice = historyList[0].price;
+      const calcDaily = ((p - prevPrice) / prevPrice) * 100;
+      setDailyReturn(parseFloat(calcDaily.toFixed(2)));
+    }
     
     const formattedDate = newDateInput.replace(/-/g, '.');
+    const changeStr = newChangeInput ? `${parseFloat(newChangeInput) >= 0 ? '+' : ''}${parseFloat(newChangeInput).toFixed(2)}%` : '+3.50%';
+
     setHistoryList([
-      { date: formattedDate, price: p, change: (newChangeInput ? `+${newChangeInput}%` : '+3.50%') },
+      { date: formattedDate, price: p, change: changeStr },
       ...historyList
     ]);
 
@@ -566,6 +591,7 @@ export default function App() {
 
     alert('기준가가 성공적으로 등록 및 반영되었습니다!');
     setNewPriceInput('');
+    setNewChangeInput('');
   };
 
   const handleTradeSubmit = (e) => {
@@ -1451,7 +1477,7 @@ export default function App() {
                   <input type="email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} placeholder="email@example.com" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 unsafely mb-1">아이디</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">아이디</label>
                   <input type="text" value={signupId} onChange={(e) => setSignupId(e.target.value)} placeholder="아이디" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                 </div>
                 <div>
