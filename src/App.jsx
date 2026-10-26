@@ -37,17 +37,13 @@ export default function App() {
   const [signupId, setSignupId] = useState('');
   const [signupPw, setSignupPw] = useState('');
 
-  // 회원 목록 상태 (Supabase 연동)
+  // 회원 목록 상태 (Supabase 연동 기본값 포함)
   const [membersList, setMembersList] = useState([
     { id: 'hong123', name: '홍길동', phone: '010-1234-5678', email: 'hong@example.com', status: '승인완료', role: 'member', balance: 15420000, holdings: 450 },
     { id: 'kim_vip', name: '김철수', phone: '010-9876-5432', email: 'kim@example.com', status: '대기중', role: 'member', balance: 5000000, holdings: 0 },
   ]);
 
-  // Supabase에서 회원 데이터 불러오기
-  useEffect(() => {
-    fetchMembersFromSupabase();
-  }, []);
-
+  // Supabase에서 회원 데이터 불러오기 및 파싱 로직 (다른 컴퓨터 가입 내역 동기화 포함)
   const fetchMembersFromSupabase = async () => {
     const { data, error } = await supabase
       .from('xbtf')
@@ -59,37 +55,55 @@ export default function App() {
     }
 
     if (data && data.length > 0) {
-      // Supabase의 xbtf 컬럼에 JSON 형태로 저장된 데이터를 파싱
-      const parsedMembers = data.map(item => {
+      const parsedMembers = [];
+      data.forEach(item => {
         try {
-          if (typeof item.xbtf === 'string') {
-            return JSON.parse(item.xbtf);
+          let parsed = item.xbtf;
+          if (typeof parsed === 'string') {
+            parsed = JSON.parse(parsed);
           }
-          return item.xbtf;
-        } catch (e) {
-          return null;
-        }
-      }).filter(Boolean);
-
-      // 기본 샘플 데이터와 Supabase 데이터 병합 (중복 제거)
-      if (parsedMembers.length > 0) {
-        setMembersList(prev => {
-          const combined = [...prev];
-          parsedMembers.forEach(pm => {
-            if (!combined.some(m => m.id === pm.id)) {
-              combined.push({
-                ...pm,
-                role: 'member',
-                balance: pm.balance || 0,
-                holdings: pm.holdings || 0
-              });
+          if (parsed) {
+            if (Array.isArray(parsed)) {
+              parsedMembers.push(...parsed);
+            } else {
+              parsedMembers.push(parsed);
             }
-          });
-          return combined;
+          }
+        } catch (e) {
+          console.error('JSON 파싱 에러:', e);
+        }
+      });
+
+      setMembersList(prev => {
+        const map = new Map();
+        // 기본 샘플 데이터 먼저 세팅
+        map.set('hong123', { id: 'hong123', name: '홍길동', phone: '010-1234-5678', email: 'hong@example.com', status: '승인완료', role: 'member', balance: 15420000, holdings: 450 });
+        map.set('kim_vip', { id: 'kim_vip', name: '김철수', phone: '010-9876-5432', email: 'kim@example.com', status: '대기중', role: 'member', balance: 5000000, holdings: 0 });
+        
+        // Supabase에 저장된 모든 가입 신청 데이터 병합
+        parsedMembers.forEach(pm => {
+          if (pm && pm.id) {
+            map.set(pm.id, {
+              id: pm.id,
+              name: pm.name || '이름없음',
+              phone: pm.phone || '-',
+              email: pm.email || '-',
+              password: pm.password || '',
+              status: pm.status || '대기중',
+              role: 'member',
+              balance: pm.balance || 0,
+              holdings: pm.holdings || 0
+            });
+          }
         });
-      }
+        return Array.from(map.values());
+      });
     }
   };
+
+  useEffect(() => {
+    fetchMembersFromSupabase();
+  }, []);
 
   // --- 펀드 및 대시보드 상태 관리 ---
   const [currentNav, setCurrentNav] = useState(33521.21);
@@ -224,6 +238,7 @@ export default function App() {
       setCurrentUser({ id: 'admin', name: '플랫폼 관리자', role: 'admin' });
       setAuthModal(null);
       setActiveTab('admin');
+      fetchMembersFromSupabase(); // 관리자 로그인 시 최신 목록 동기화
       alert('관리자 계정으로 로그인되었습니다.');
       setLoginId('');
       setLoginPw('');
@@ -271,7 +286,6 @@ export default function App() {
       holdings: 0
     };
 
-    // Supabase 'xbtf' 테이블에 데이터 저장
     const { error } = await supabase
       .from('xbtf')
       .insert([
@@ -286,7 +300,6 @@ export default function App() {
       return;
     }
 
-    setMembersList([...membersList, { ...newMemberData, role: 'member' }]);
     alert('회원가입 신청이 완료되었습니다! 관리자 승인 후 로그인하실 수 있습니다.');
     setSignupName('');
     setSignupPhone('');
@@ -294,6 +307,7 @@ export default function App() {
     setSignupId('');
     setSignupPw('');
     setAuthModal('login');
+    fetchMembersFromSupabase();
   };
 
   const handleLogout = () => {
@@ -396,13 +410,6 @@ export default function App() {
       alert('올바른 출금 금액과 수신 지갑 주소를 입력해주세요.');
       return;
     }
-    const krwExchangeRate = 1350;
-    const usdtAmount = parseFloat((krw / krwExchangeRate).toFixed(2));
-
-    if (activeMemberData.balance < krw) {
-      alert('출금 가능 예수금이 부족합니다.');
-      return;
-    }
 
     const newReq = {
       id: Date.now(),
@@ -410,7 +417,7 @@ export default function App() {
       memberName: currentUser.name,
       type: '출금신청',
       amountKRW: krw,
-      assignedUSDT: usdtAmount,
+      assignedUSDT: parseFloat((krw / 1350).toFixed(2)),
       assignedAddress: withdrawAddress,
       status: '대기중',
       date: new Date().toISOString().replace('T', ' ').substring(0, 16)
@@ -452,8 +459,8 @@ export default function App() {
       return;
     }
 
-    const currentBal = currentUser.id === 'admin' ? 0 : (membersList.find(m => m.id === currentUser.id)?.balance || 0);
-    const currentHoldings = currentUser.id === 'admin' ? 0 : (membersList.find(m => m.id === currentUser.id)?.holdings || 0);
+    const currentBal = membersList.find(m => m.id === currentUser.id)?.balance || 0;
+    const currentHoldings = membersList.find(m => m.id === currentUser.id)?.holdings || 0;
 
     let updatedBal = currentBal;
     let updatedHoldings = currentHoldings;
@@ -526,7 +533,7 @@ export default function App() {
 
               {currentUser && currentUser.role === 'admin' && (
                 <button 
-                  onClick={() => setActiveTab('admin')} 
+                  onClick={() => { fetchMembersFromSupabase(); setActiveTab('admin'); }} 
                   className={`px-4 py-1.5 rounded-md text-sm font-medium transition cursor-pointer ${activeTab === 'admin' ? 'bg-purple-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}
                 >
                   관리자 페이지
@@ -585,6 +592,7 @@ export default function App() {
                 </span>
                 <button 
                   onClick={() => {
+                    fetchMembersFromSupabase();
                     const now = new Date();
                     const formatted = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
                     setLastUpdated(formatted);
@@ -1016,8 +1024,16 @@ export default function App() {
                 <span className="text-xs bg-purple-100 text-purple-700 font-semibold px-2.5 py-1 rounded-full">시스템 관리자 모드</span>
                 <h2 className="text-xl font-bold text-slate-900 mt-2">XBTF 플랫폼 통합 관리자 센터</h2>
               </div>
-              <div className="text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
-                총 회원 수: <span className="font-bold text-slate-800">{membersList.length}명</span> | 대기 중인 신청: <span className="font-bold text-amber-600">{depositRequests.filter(r => r.status === '대기중').length}건</span>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={fetchMembersFromSupabase}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> DB 회원 목록 새로고침
+                </button>
+                <div className="text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                  총 회원 수: <span className="font-bold text-slate-800">{membersList.length}명</span>
+                </div>
               </div>
             </div>
 
@@ -1065,7 +1081,7 @@ export default function App() {
 
             {/* 회원가입 관리 및 승인 대기 목록 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">회원 가입 승인 관리 (Supabase 연동)</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-4">회원 가입 승인 관리 (Supabase 연동 실시간)</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
