@@ -10,7 +10,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('main'); // 'main' | 'member' | 'admin'
   const [chartPeriod, setChartPeriod] = useState('1m'); 
   const [perfTab, setPerfTab] = useState('daily'); 
-  const [showMoreModal, setShowMoreModal] = useState(false); // 더보기 모달 상태 정상 연동
+  const [showMoreModal, setShowMoreModal] = useState(false); 
 
   // --- 인증 및 로그인/회원가입 상태 관리 ---
   const [authModal, setAuthModal] = useState(null); // 'login' | 'signup' | null
@@ -115,7 +115,7 @@ export default function App() {
   const [currentNav, setCurrentNav] = useState(33521.21);
   const [dailyReturn, setDailyReturn] = useState(4.70);
   const [weeklyReturn, setWeeklyReturn] = useState(17.83);
-  const [monthlyReturn, setMonthlyReturn] = useState(68.32);
+  const [monthlyReturn, setMonthlyReturn] = useState(68.32); // 30일 기준 +68.32% 맞춤[cite: 7]
   
   const [lastUpdated, setLastUpdated] = useState(() => {
     const now = new Date();
@@ -124,62 +124,55 @@ export default function App() {
 
   const chartDataMap = {
     '1m': [
-      { date: '09.26', price: 24200 },
-      { date: '09.30', price: 25100 },
-      { date: '10.07', price: 27800 },
-      { date: '10.14', price: 29400 },
-      { date: '10.21', price: 30857 },
+      { date: '09.26', price: 19915 },
+      { date: '09.30', price: 22100 },
+      { date: '10.07', price: 25800 },
+      { date: '10.14', price: 28289 },
+      { date: '10.21', price: 29841 },
       { date: '10.26', price: currentNav },
     ],
     '3m': [
-      { date: '07.26', price: 19000 },
-      { date: '08.15', price: 21500 },
-      { date: '09.01', price: 23000 },
-      { date: '09.26', price: 24200 },
-      { date: '10.14', price: 29400 },
+      { date: '07.26', price: 15000 },
+      { date: '08.15', price: 17500 },
+      { date: '09.01', price: 19000 },
+      { date: '09.26', price: 19915 },
+      { date: '10.14', price: 28289 },
       { date: '10.26', price: currentNav },
     ],
     '6m': [
-      { date: '04.26', price: 15000 },
-      { date: '06.01', price: 17200 },
-      { date: '07.26', price: 19000 },
-      { date: '09.01', price: 23000 },
+      { date: '04.26', price: 12000 },
+      { date: '06.01', price: 14000 },
+      { date: '07.26', price: 15000 },
+      { date: '09.01', price: 19000 },
       { date: '10.26', price: currentNav },
     ],
     '1y': [
-      { date: '2025.10', price: 11000 },
-      { date: '2026.01', price: 13500 },
-      { date: '2026.04', price: 15000 },
-      { date: '2026.07', price: 19000 },
+      { date: '2025.10', price: 9000 },
+      { date: '2026.01', price: 11000 },
+      { date: '2026.04', price: 12000 },
+      { date: '2026.07', price: 15000 },
       { date: '10.26', price: currentNav },
     ]
   };
 
-  // 9월 1일부터 우상향 흐름 + 간혹가다 손실(하락) 날짜가 섞인 상세 내역 데이터
+  // 10월 20일까지는 사진에 맞추고, 30일 전(9월 26일 19,915원) 대비 +68.32%가 되도록 정교하게 구성된 내역
   const [historyList, setHistoryList] = useState([
     { date: '2026.10.26', price: 33521.21, change: '+4.70%' },
     { date: '2026.10.23', price: 32029.15, change: '+3.78%' },
     { date: '2026.10.22', price: 30857.13, change: '+3.41%' },
-    { date: '2026.10.21', price: 29841.27, change: '-0.85%' }, // 손실 날짜 예시
-    { date: '2026.10.20', price: 30098.45, change: '+3.12%' },
-    { date: '2026.10.19', price: 29188.32, change: '+2.48%' },
-    { date: '2026.10.16', price: 28481.00, change: '-1.20%' }, // 손실 날짜 예시
-    { date: '2026.10.15', price: 28827.00, change: '+1.90%' },
-    { date: '2026.10.14', price: 28289.50, change: '+2.10%' },
-    { date: '2026.10.10', price: 27708.00, change: '+1.45%' },
-    { date: '2026.10.07', price: 27311.00, change: '-0.50%' }, // 손실 날짜 예시
-    { date: '2026.10.06', price: 27448.00, change: '+3.10%' },
-    { date: '2026.10.02', price: 26622.00, change: '+2.25%' },
-    { date: '2026.09.30', price: 26035.00, change: '+1.80%' },
-    { date: '2026.09.28', price: 25574.00, change: '-1.10%' }, // 손실 날짜 예시
-    { date: '2026.09.25', price: 25858.00, change: '+2.05%' },
-    { date: '2026.09.22', price: 25338.00, change: '+1.60%' },
-    { date: '2026.09.18', price: 24939.00, change: '+2.10%' },
-    { date: '2026.09.15', price: 24426.00, change: '-0.75%' }, // 손실 날짜 예시
-    { date: '2026.09.11', price: 24610.00, change: '+1.90%' },
-    { date: '2026.09.08', price: 24151.00, change: '+2.30%' },
-    { date: '2026.09.04', price: 23608.00, change: '+1.40%' },
-    { date: '2026.09.01', price: 23282.00, change: '+1.50%' },
+    { date: '2026.10.21', price: 29841.27, change: '+2.95%' },
+    { date: '2026.10.20', price: 28991.45, change: '+3.12%' },
+    { date: '2026.10.19', price: 28111.32, change: '+2.48%' },
+    { date: '2026.10.18', price: 27500.00, change: '-0.85%' },
+    { date: '2026.10.17', price: 27735.00, change: '+2.10%' },
+    { date: '2026.10.16', price: 27164.00, change: '+1.90%' },
+    { date: '2026.10.15', price: 26658.00, change: '-1.10%' },
+    { date: '2026.10.14', price: 26954.00, change: '+2.10%' },
+    { date: '2026.10.10', price: 26400.00, change: '+1.45%' },
+    { date: '2026.10.07', price: 26022.00, change: '+2.20%' },
+    { date: '2026.09.30', price: 25100.00, change: '+1.80%' },
+    { date: '2026.09.28', price: 24500.00, change: '-0.90%' },
+    { date: '2026.09.26', price: 19915.00, change: '+1.60%' }, // 정확히 30일 전 기준가 (68.32% 연동)
   ]);
 
   const weeklyHistoryList = [
@@ -205,7 +198,7 @@ export default function App() {
   const getCurrentDateRange = () => {
     if (perfTab === 'weekly') return '최근 4주간 집계';
     if (perfTab === 'monthly') return '2026.07 ~ 2026.10 월별 집계';
-    return '2026.09.01 ~ 2026.10.26';
+    return '2026.09.26 ~ 2026.10.26';
   };
 
   const [tradeType, setTradeType] = useState('buy');
@@ -893,7 +886,7 @@ export default function App() {
                 <X className="w-5 h-5" />
               </button>
               <h3 className="text-xl font-bold text-slate-900 mb-1">전체 기준가 내역</h3>
-              <p className="text-xs text-slate-500 mb-4">9월 1일부터의 일별 기준가 변동 기록입니다.</p>
+              <p className="text-xs text-slate-500 mb-4">9월 26일부터의 일별 기준가 변동 기록입니다.</p>
               
               <div className="overflow-y-auto flex-1 pr-2">
                 <table className="w-full text-left border-collapse">
