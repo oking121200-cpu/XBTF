@@ -115,7 +115,7 @@ export default function App() {
   const [currentNav, setCurrentNav] = useState(33521.21);
   const [dailyReturn, setDailyReturn] = useState(4.70);
   const [weeklyReturn, setWeeklyReturn] = useState(17.83);
-  const [monthlyReturn, setMonthlyReturn] = useState(68.32); // 30일 기준 +68.32% 맞춤[cite: 7]
+  const [monthlyReturn, setMonthlyReturn] = useState(68.32); //[cite: 7]
   
   const [lastUpdated, setLastUpdated] = useState(() => {
     const now = new Date();
@@ -134,7 +134,7 @@ export default function App() {
     '3m': [
       { date: '07.26', price: 15000 },
       { date: '08.15', price: 17500 },
-      { date: '09.01', price: 19000 },
+      { date: '09.01', price: 19915 },
       { date: '09.26', price: 19915 },
       { date: '10.14', price: 28289 },
       { date: '10.26', price: currentNav },
@@ -143,7 +143,7 @@ export default function App() {
       { date: '04.26', price: 12000 },
       { date: '06.01', price: 14000 },
       { date: '07.26', price: 15000 },
-      { date: '09.01', price: 19000 },
+      { date: '09.01', price: 19915 },
       { date: '10.26', price: currentNav },
     ],
     '1y': [
@@ -155,7 +155,7 @@ export default function App() {
     ]
   };
 
-  // 10월 20일까지는 사진에 맞추고, 30일 전(9월 26일 19,915원) 대비 +68.32%가 되도록 정교하게 구성된 내역
+  // 9월 1일부터 10월 26일까지의 모든 평일(주말 제외) 기준가 및 변동률 내역
   const [historyList, setHistoryList] = useState([
     { date: '2026.10.26', price: 33521.21, change: '+4.70%' },
     { date: '2026.10.23', price: 32029.15, change: '+3.78%' },
@@ -163,16 +163,39 @@ export default function App() {
     { date: '2026.10.21', price: 29841.27, change: '+2.95%' },
     { date: '2026.10.20', price: 28991.45, change: '+3.12%' },
     { date: '2026.10.19', price: 28111.32, change: '+2.48%' },
-    { date: '2026.10.18', price: 27500.00, change: '-0.85%' },
-    { date: '2026.10.17', price: 27735.00, change: '+2.10%' },
-    { date: '2026.10.16', price: 27164.00, change: '+1.90%' },
-    { date: '2026.10.15', price: 26658.00, change: '-1.10%' },
-    { date: '2026.10.14', price: 26954.00, change: '+2.10%' },
-    { date: '2026.10.10', price: 26400.00, change: '+1.45%' },
-    { date: '2026.10.07', price: 26022.00, change: '+2.20%' },
-    { date: '2026.09.30', price: 25100.00, change: '+1.80%' },
-    { date: '2026.09.28', price: 24500.00, change: '-0.90%' },
-    { date: '2026.09.26', price: 19915.00, change: '+1.60%' }, // 정확히 30일 전 기준가 (68.32% 연동)
+    { date: '2026.10.16', price: 27430.00, change: '-0.85%' },
+    { date: '2026.10.15', price: 27665.00, change: '+1.90%' },
+    { date: '2026.10.14', price: 27148.00, change: '+2.10%' },
+    { date: '2026.10.13', price: 26590.00, change: '+1.45%' },
+    { date: '2026.10.12', price: 26210.00, change: '-1.10%' },
+    { date: '2026.10.08', price: 26500.00, change: '+2.20%' },
+    { date: '2026.10.07', price: 25930.00, change: '-0.75%' },
+    { date: '2026.10.06', price: 26125.00, change: '+3.10%' },
+    { date: '2026.10.05', price: 25340.00, change: '+1.80%' },
+    { date: '2026.10.02', price: 24890.00, change: '+1.65%' },
+    { date: '2026.10.01', price: 24486.00, change: '-0.90%' },
+    { date: '2026.09.30', price: 24708.00, change: '+2.05%' },
+    { date: '2026.09.29', price: 24212.00, change: '+1.50%' },
+    { date: '2026.09.28', price: 23854.00, change: '-1.20%' },
+    { date: '2026.09.25', price: 24144.00, change: '+1.75%' },
+    { date: '2026.09.24', price: 23729.00, change: '+2.10%' },
+    { date: '2026.09.23', price: 23241.00, change: '+1.30%' },
+    { date: '2026.09.22', price: 22942.00, change: '-0.65%' },
+    { date: '2026.09.21', price: 23092.00, change: '+2.20%' },
+    { date: '2026.09.18', price: 22594.00, change: '+1.90%' },
+    { date: '2026.09.17', price: 22173.00, change: '+1.45%' },
+    { date: '2026.09.16', price: 21856.00, change: '-1.10%' },
+    { date: '2026.09.15', price: 22099.00, change: '+2.15%' },
+    { date: '2026.09.14', price: 21634.00, change: '+1.80%' },
+    { date: '2026.09.11', price: 21251.00, change: '+1.20%' },
+    { date: '2026.09.10', price: 20999.00, change: '-0.80%' },
+    { date: '2026.09.09', price: 21168.00, change: '+2.05%' },
+    { date: '2026.09.08', price: 20743.00, change: '+1.60%' },
+    { date: '2026.09.07', price: 20416.00, change: '+1.35%' },
+    { date: '2026.09.04', price: 20144.00, change: '-0.50%' },
+    { date: '2026.09.03', price: 20245.00, change: '+1.80%' },
+    { date: '2026.09.02', price: 19887.00, change: '-0.40%' },
+    { date: '2026.09.01', price: 19915.00, change: '+1.50%' },
   ]);
 
   const weeklyHistoryList = [
@@ -198,7 +221,7 @@ export default function App() {
   const getCurrentDateRange = () => {
     if (perfTab === 'weekly') return '최근 4주간 집계';
     if (perfTab === 'monthly') return '2026.07 ~ 2026.10 월별 집계';
-    return '2026.09.26 ~ 2026.10.26';
+    return '2026.09.01 ~ 2026.10.26 (평일)';
   };
 
   const [tradeType, setTradeType] = useState('buy');
@@ -875,7 +898,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= [더보기 >] 클릭 시 뜨는 전체 기준가 모달 ================= */}
+        {/* ================= [더보기 >] 모달 (9월 1일~10월 26일 평일 전체 내역) ================= */}
         {showMoreModal && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl relative max-h-[85vh] flex flex-col">
@@ -886,7 +909,7 @@ export default function App() {
                 <X className="w-5 h-5" />
               </button>
               <h3 className="text-xl font-bold text-slate-900 mb-1">전체 기준가 내역</h3>
-              <p className="text-xs text-slate-500 mb-4">9월 26일부터의 일별 기준가 변동 기록입니다.</p>
+              <p className="text-xs text-slate-500 mb-4">9월 1일부터 10월 26일까지의 평일 일별 기준가 변동 기록입니다.</p>
               
               <div className="overflow-y-auto flex-1 pr-2">
                 <table className="w-full text-left border-collapse">
