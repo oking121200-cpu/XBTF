@@ -116,12 +116,13 @@ export default function App() {
   }, []);
 
   // --- 펀드 및 대시보드 상태 관리 ---
-  const [currentNav, setCurrentNav] = useState(33521.21);
-  const [dailyReturn, setDailyReturn] = useState(4.70);
-  const [weeklyReturn, setWeeklyReturn] = useState(17.83);
-  const [monthlyReturn, setMonthlyReturn] = useState(68.32);
+  const [currentNav, setCurrentNav] = useState(33709.89);
+  const [dailyReturn, setDailyReturn] = useState(5.25);
+  const [weeklyReturn, setWeeklyReturn] = useState(0);
+  const [monthlyReturn, setMonthlyReturn] = useState(0);
 
   const [historyList, setHistoryList] = useState([
+    { date: '2026.10.27', price: 33709.89, change: '+5.25%' },
     { date: '2026.10.26', price: 33521.21, change: '+4.70%' },
     { date: '2026.10.23', price: 32029.15, change: '+3.78%' },
     { date: '2026.10.22', price: 30857.13, change: '+3.41%' },
@@ -163,16 +164,16 @@ export default function App() {
     { date: '2026.09.01', price: 16671.60, change: '+1.50%' },
   ]);
 
-  // --- 기준가 또는 히스토리가 바뀔 때 주간/월간 수익률 자동 연동 계산 ---
+  // --- 실시간 주간 및 월간 수익률 자동 계산 로직 ---
   useEffect(() => {
     if (historyList && historyList.length > 1) {
-      // 주간 수익률: 약 5거래일 전 가격 대비 현재가 변동률 계산
+      // 주간 수익률: 5거래일 전 가격 대비 현재가 변동률 계산
       const weekIndex = Math.min(5, historyList.length - 1);
       const prevWeekPrice = historyList[weekIndex].price;
       const wRet = ((currentNav - prevWeekPrice) / prevWeekPrice) * 100;
       setWeeklyReturn(parseFloat(wRet.toFixed(2)));
 
-      // 월간 수익률: 9월 28일(30일 기준 시작점) 가격 대비 현재가 변동률 계산
+      // 월간 수익률: 9월 28일 기준가 대비 현재가 변동률 계산 (목표 +68.32% 연동)
       const baseMonthItem = historyList.find(h => h.date === '2026.09.28') || historyList[historyList.length - 1];
       const baseMonthPrice = baseMonthItem.price;
       const mRet = ((currentNav - baseMonthPrice) / baseMonthPrice) * 100;
@@ -186,46 +187,21 @@ export default function App() {
   });
 
   const chartDataMap = {
-    '1m': [
-      { date: '09.28', price: 19915.17 },
-      { date: '09.30', price: 21100.00 },
-      { date: '10.07', price: 23500.00 },
-      { date: '10.14', price: 27148.00 },
-      { date: '10.21', price: 29841.27 },
-      { date: '10.26', price: currentNav },
-    ],
-    '3m': [
-      { date: '09.01', price: 17500.00 },
-      { date: '09.15', price: 18800.00 },
-      { date: '09.28', price: 19915.17 },
-      { date: '10.14', price: 27148.00 },
-      { date: '10.26', price: currentNav },
-    ],
-    '6m': [
-      { date: '09.01', price: 17500.00 },
-      { date: '09.15', price: 18800.00 },
-      { date: '09.28', price: 19915.17 },
-      { date: '10.14', price: 27148.00 },
-      { date: '10.26', price: currentNav },
-    ],
-    '1y': [
-      { date: '09.01', price: 17500.00 },
-      { date: '09.15', price: 18800.00 },
-      { date: '09.28', price: 19915.17 },
-      { date: '10.14', price: 27148.00 },
-      { date: '10.26', price: currentNav },
-    ]
+    '1m': historyList.slice(0, 15).reverse().map(h => ({ date: h.date.substring(5), price: h.price })),
+    '3m': historyList.slice(0, 40).reverse().map(h => ({ date: h.date.substring(5), price: h.price })),
+    '6m': historyList.slice(0, 40).reverse().map(h => ({ date: h.date.substring(5), price: h.price })),
+    '1y': historyList.slice(0, 40).reverse().map(h => ({ date: h.date.substring(5), price: h.price }))
   };
 
   const weeklyHistoryList = [
-    { date: '2026.10주차 (10.20 ~ 10.26)', price: 33521.21, change: `+${weeklyReturn}%` },
+    { date: '2026.10주차 (10.20 ~ 10.27)', price: currentNav, change: `${weeklyReturn >= 0 ? '+' : ''}${weeklyReturn.toFixed(2)}%` },
     { date: '2026.09주차 (10.13 ~ 10.19)', price: 28450.00, change: '+12.40%' },
     { date: '2026.08주차 (10.06 ~ 10.12)', price: 25300.00, change: '+8.15%' },
     { date: '2026.07주차 (09.29 ~ 10.05)', price: 23400.00, change: '+5.20%' },
   ];
 
   const monthlyHistoryList = [
-    { date: '2026년 10월 마감', price: 33521.21, change: `+${monthlyReturn}%` },[cite: 7, 9]
+    { date: '2026년 10월 마감', price: currentNav, change: `${monthlyReturn >= 0 ? '+' : ''}${monthlyReturn.toFixed(2)}%` },
     { date: '2026년 9월 마감', price: 24708.00, change: '+24.07%' },
   ];
 
@@ -249,7 +225,7 @@ export default function App() {
   const getCurrentDateRange = () => {
     if (perfTab === 'weekly') return '최근 4주간 집계';
     if (perfTab === 'monthly') return '2026.09 ~ 2026.10 월별 집계';
-    return '2026.09.01 ~ 2026.10.26 (평일)';
+    return '2026.09.01 ~ 2026.10.27 (평일)';
   };
 
   const [tradeType, setTradeType] = useState('buy');
@@ -267,7 +243,7 @@ export default function App() {
   const [newPriceInput, setNewPriceInput] = useState('');
   const [newChangeInput, setNewChangeInput] = useState('');
   const [auditLogs, setAuditLogs] = useState([
-    { id: 1, admin: 'oking1234', action: '기준가 등록 (33,521.21원)', time: '2026.10.26 09:00' },
+    { id: 1, admin: 'oking1234', action: '기준가 등록 (33,709.89원)', time: '2026.10.27 09:00' },
   ]);
 
   const getKSTDateString = () => {
@@ -568,16 +544,17 @@ export default function App() {
     const p = parseFloat(newPriceInput);
     setCurrentNav(p);
 
+    let calcDaily = 3.50;
     if (newChangeInput) {
-      setDailyReturn(parseFloat(newChangeInput));
+      calcDaily = parseFloat(newChangeInput);
     } else if (historyList.length > 0) {
       const prevPrice = historyList[0].price;
-      const calcDaily = ((p - prevPrice) / prevPrice) * 100;
-      setDailyReturn(parseFloat(calcDaily.toFixed(2)));
+      calcDaily = ((p - prevPrice) / prevPrice) * 100;
     }
+    setDailyReturn(parseFloat(calcDaily.toFixed(2)));
     
     const formattedDate = newDateInput.replace(/-/g, '.');
-    const changeStr = newChangeInput ? `${parseFloat(newChangeInput) >= 0 ? '+' : ''}${parseFloat(newChangeInput).toFixed(2)}%` : '+3.50%';
+    const changeStr = `${calcDaily >= 0 ? '+' : ''}${calcDaily.toFixed(2)}%`;
 
     setHistoryList([
       { date: formattedDate, price: p, change: changeStr },
@@ -983,7 +960,7 @@ export default function App() {
                 <X className="w-5 h-5" />
               </button>
               <h3 className="text-xl font-bold text-slate-900 mb-1">전체 기준가 내역</h3>
-              <p className="text-xs text-slate-500 mb-4">9월 1일부터 10월 26일까지의 평일 일별 기준가 변동 기록입니다.</p>
+              <p className="text-xs text-slate-500 mb-4">9월 1일부터 10월 27일까지의 평일 일별 기준가 변동 기록입니다.</p>
               
               <div className="overflow-y-auto flex-1 pr-2">
                 <table className="w-full text-left border-collapse">
