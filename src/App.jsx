@@ -10,7 +10,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('main'); // 'main' | 'member' | 'admin'
   const [chartPeriod, setChartPeriod] = useState('1m'); 
   const [perfTab, setPerfTab] = useState('daily'); 
-  const [showMoreModal, setShowMoreModal] = useState(false); 
+  const [showMoreModal, setShowMoreModal] = useState(false); // 더보기 모달 상태 정상 연동
 
   // --- 인증 및 로그인/회원가입 상태 관리 ---
   const [authModal, setAuthModal] = useState(null); // 'login' | 'signup' | null
@@ -57,7 +57,7 @@ export default function App() {
 
     if (data && data.length > 0) {
       const parsedMembers = [];
-      const requestMap = new Map(); // id 기준으로 중복 방지
+      const requestMap = new Map();
 
       data.forEach(item => {
         try {
@@ -67,7 +67,6 @@ export default function App() {
           }
           if (parsed) {
             if (parsed.type === 'USDT 예치(입금)' || parsed.type === '출금신청') {
-              // 최신 상태 우선 반영을 위해 맵에 저장 (동일 id면 덮어쓰기)
               requestMap.set(parsed.id, parsed);
             } else {
               if (Array.isArray(parsed)) {
@@ -156,15 +155,31 @@ export default function App() {
     ]
   };
 
+  // 9월 1일부터 우상향 흐름 + 간혹가다 손실(하락) 날짜가 섞인 상세 내역 데이터
   const [historyList, setHistoryList] = useState([
     { date: '2026.10.26', price: 33521.21, change: '+4.70%' },
     { date: '2026.10.23', price: 32029.15, change: '+3.78%' },
     { date: '2026.10.22', price: 30857.13, change: '+3.41%' },
-    { date: '2026.10.21', price: 29841.27, change: '+2.95%' },
-    { date: '2026.10.20', price: 28991.45, change: '+3.12%' },
-    { date: '2026.10.19', price: 28111.32, change: '+2.48%' },
-    { date: '2026.10.18', price: 27500.00, change: '+1.90%' },
-    { date: '2026.10.17', price: 26980.50, change: '+2.10%' },
+    { date: '2026.10.21', price: 29841.27, change: '-0.85%' }, // 손실 날짜 예시
+    { date: '2026.10.20', price: 30098.45, change: '+3.12%' },
+    { date: '2026.10.19', price: 29188.32, change: '+2.48%' },
+    { date: '2026.10.16', price: 28481.00, change: '-1.20%' }, // 손실 날짜 예시
+    { date: '2026.10.15', price: 28827.00, change: '+1.90%' },
+    { date: '2026.10.14', price: 28289.50, change: '+2.10%' },
+    { date: '2026.10.10', price: 27708.00, change: '+1.45%' },
+    { date: '2026.10.07', price: 27311.00, change: '-0.50%' }, // 손실 날짜 예시
+    { date: '2026.10.06', price: 27448.00, change: '+3.10%' },
+    { date: '2026.10.02', price: 26622.00, change: '+2.25%' },
+    { date: '2026.09.30', price: 26035.00, change: '+1.80%' },
+    { date: '2026.09.28', price: 25574.00, change: '-1.10%' }, // 손실 날짜 예시
+    { date: '2026.09.25', price: 25858.00, change: '+2.05%' },
+    { date: '2026.09.22', price: 25338.00, change: '+1.60%' },
+    { date: '2026.09.18', price: 24939.00, change: '+2.10%' },
+    { date: '2026.09.15', price: 24426.00, change: '-0.75%' }, // 손실 날짜 예시
+    { date: '2026.09.11', price: 24610.00, change: '+1.90%' },
+    { date: '2026.09.08', price: 24151.00, change: '+2.30%' },
+    { date: '2026.09.04', price: 23608.00, change: '+1.40%' },
+    { date: '2026.09.01', price: 23282.00, change: '+1.50%' },
   ]);
 
   const weeklyHistoryList = [
@@ -190,7 +205,7 @@ export default function App() {
   const getCurrentDateRange = () => {
     if (perfTab === 'weekly') return '최근 4주간 집계';
     if (perfTab === 'monthly') return '2026.07 ~ 2026.10 월별 집계';
-    return '2026.09.26 ~ 2026.10.26';
+    return '2026.09.01 ~ 2026.10.26';
   };
 
   const [tradeType, setTradeType] = useState('buy');
@@ -335,7 +350,6 @@ export default function App() {
     fetchDataFromSupabase();
   };
 
-  // --- 기존 행을 찾아 업데이트하도록 수정된 관리자 입금 안내 전송 함수 ---
   const handleAdminSendDetails = async (reqId) => {
     const input = adminInputData[reqId] || {};
     const usdt = parseFloat(input.usdt);
@@ -372,7 +386,6 @@ export default function App() {
     fetchDataFromSupabase();
   };
 
-  // --- 기존 행을 찾아 업데이트하도록 수정된 관리자 입금 승인 함수 ---
   const handleAdminConfirmDeposit = async (reqId) => {
     const targetReq = depositRequests.find(r => r.id === reqId);
     if (!targetReq || targetReq.status === '승인완료') return;
@@ -388,14 +401,12 @@ export default function App() {
           let parsed = row.xbtf;
           if (typeof parsed === 'string') parsed = JSON.parse(parsed);
           
-          // 입금 요청건 업데이트 (새로 insert 하지 않고 기존 행 덮어쓰기)
           if (parsed && parsed.id === targetReq.id) {
             const updatePayload = { xbtf: JSON.stringify(updatedReq) };
             if (row.id) updatePayload.id = row.id;
             await supabase.from('xbtf').upsert(updatePayload);
           }
           
-          // 회원 잔고 업데이트
           if (parsed && parsed.id === memberId) {
             const currentBal = parsed.balance || 0;
             const updatedMember = { ...parsed, balance: currentBal + addAmount };
@@ -797,7 +808,7 @@ export default function App() {
                         <div key={i} className="flex justify-between items-center text-xs py-1.5 border-b border-slate-100 last:border-0">
                           <span className="text-slate-600 font-medium">{h.date}</span>
                           <span className="font-bold text-slate-900">{h.price.toLocaleString()}원</span>
-                          <span className="text-emerald-600 font-semibold">{h.change}</span>
+                          <span className={`font-semibold ${h.change.startsWith('-') ? 'text-rose-600' : 'text-emerald-600'}`}>{h.change}</span>
                         </div>
                       ))}
                     </div>
@@ -842,7 +853,9 @@ export default function App() {
                         <tr key={idx} className="hover:bg-slate-50/80 transition">
                           <td className="py-3 px-4 font-medium text-slate-700">{row.date}</td>
                           <td className="py-3 px-4 font-bold text-slate-900">{row.price.toLocaleString()}원</td>
-                          <td className="py-3 px-4 text-right font-semibold text-emerald-600">▲ {row.change}</td>
+                          <td className={`py-3 px-4 text-right font-semibold ${row.change.startsWith('-') ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {row.change.startsWith('-') ? '▼ ' : '▲ '}{row.change}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -864,6 +877,54 @@ export default function App() {
                 <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-400">
                   © XBTF Asset Management. All rights reserved.
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= [더보기 >] 클릭 시 뜨는 전체 기준가 모달 ================= */}
+        {showMoreModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl relative max-h-[85vh] flex flex-col">
+              <button 
+                onClick={() => setShowMoreModal(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h3 className="text-xl font-bold text-slate-900 mb-1">전체 기준가 내역</h3>
+              <p className="text-xs text-slate-500 mb-4">9월 1일부터의 일별 기준가 변동 기록입니다.</p>
+              
+              <div className="overflow-y-auto flex-1 pr-2">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0">
+                      <th className="py-2.5 px-3">날짜</th>
+                      <th className="py-2.5 px-3">기준가(원)</th>
+                      <th className="py-2.5 px-3 text-right">변동률</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {historyList.map((h, i) => (
+                      <tr key={i} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-3 font-medium text-slate-700">{h.date}</td>
+                        <td className="py-2.5 px-3 font-bold text-slate-900">{h.price.toLocaleString()}원</td>
+                        <td className={`py-2.5 px-3 text-right font-semibold ${h.change.startsWith('-') ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {h.change}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 text-right">
+                <button 
+                  onClick={() => setShowMoreModal(false)}
+                  className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer"
+                >
+                  닫기
+                </button>
               </div>
             </div>
           </div>
