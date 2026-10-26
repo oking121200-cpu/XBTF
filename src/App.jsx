@@ -208,19 +208,17 @@ export default function App() {
     { date: '2026.07주차 (09.29 ~ 10.05)', price: 23400.00, change: '+5.20%' },
   ];
 
+  // 9월 출시 상품에 맞추어 8월, 7월 마감 내역 삭제
   const monthlyHistoryList = [
     { date: '2026년 10월 마감', price: 33521.21, change: '+68.32%' },
     { date: '2026년 9월 마감', price: 24200.00, change: '+45.10%' },
-    { date: '2026년 8월 마감', price: 21500.00, change: '+22.40%' },
-    { date: '2026년 7월 마감', price: 19000.00, change: '+15.80%' },
   ];
 
-  // 페이지네이션 계산 로직
+  // 페이지네이션 및 탭별 데이터 분기 처리
   const getCurrentTableData = () => {
     if (perfTab === 'weekly') return weeklyHistoryList;
     if (perfTab === 'monthly') return monthlyHistoryList;
     
-    // 일별 탭일 경우 페이징 처리
     const startIndex = (currentPage - 1) * itemsPerPage;
     return historyList.slice(startIndex, startIndex + itemsPerPage);
   };
@@ -229,7 +227,7 @@ export default function App() {
 
   const getCurrentDateRange = () => {
     if (perfTab === 'weekly') return '최근 4주간 집계';
-    if (perfTab === 'monthly') return '2026.07 ~ 2026.10 월별 집계';
+    if (perfTab === 'monthly') return '2026.09 ~ 2026.10 월별 집계';
     return '2026.09.01 ~ 2026.10.26 (평일)';
   };
 
@@ -890,7 +888,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 페이지네이션 컨트롤 바 */}
+                {/* 페이지네이션 컨트롤 바 (일별 탭 전용) */}
                 {perfTab === 'daily' && totalPages > 1 && (
                   <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100">
                     <button
