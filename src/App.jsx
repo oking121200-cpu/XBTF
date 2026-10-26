@@ -30,20 +30,20 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // 회원가입 입력 폼 상태 (휴대폰 번호, 이메일 추가)
+  // 회원가입 입력 폼 상태
   const [signupName, setSignupName] = useState('');
   const [signupPhone, setSignupPhone] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupId, setSignupId] = useState('');
   const [signupPw, setSignupPw] = useState('');
 
-  // 회원 목록 상태 (Supabase 연동 기본값 포함)
+  // 회원 목록 상태 (Supabase 연동)
   const [membersList, setMembersList] = useState([
     { id: 'hong123', name: '홍길동', phone: '010-1234-5678', email: 'hong@example.com', status: '승인완료', role: 'member', balance: 15420000, holdings: 450 },
     { id: 'kim_vip', name: '김철수', phone: '010-9876-5432', email: 'kim@example.com', status: '대기중', role: 'member', balance: 5000000, holdings: 0 },
   ]);
 
-  // Supabase에서 회원 데이터 불러오기 및 파싱 로직 (다른 컴퓨터 가입 내역 동기화 포함)
+  // Supabase에서 회원 데이터 불러오기 및 파싱
   const fetchMembersFromSupabase = async () => {
     const { data, error } = await supabase
       .from('xbtf')
@@ -76,11 +76,9 @@ export default function App() {
 
       setMembersList(prev => {
         const map = new Map();
-        // 기본 샘플 데이터 먼저 세팅
         map.set('hong123', { id: 'hong123', name: '홍길동', phone: '010-1234-5678', email: 'hong@example.com', status: '승인완료', role: 'member', balance: 15420000, holdings: 450 });
         map.set('kim_vip', { id: 'kim_vip', name: '김철수', phone: '010-9876-5432', email: 'kim@example.com', status: '대기중', role: 'member', balance: 5000000, holdings: 0 });
         
-        // Supabase에 저장된 모든 가입 신청 데이터 병합
         parsedMembers.forEach(pm => {
           if (pm && pm.id) {
             map.set(pm.id, {
@@ -238,7 +236,7 @@ export default function App() {
       setCurrentUser({ id: 'admin', name: '플랫폼 관리자', role: 'admin' });
       setAuthModal(null);
       setActiveTab('admin');
-      fetchMembersFromSupabase(); // 관리자 로그인 시 최신 목록 동기화
+      fetchMembersFromSupabase();
       alert('관리자 계정으로 로그인되었습니다.');
       setLoginId('');
       setLoginPw('');
@@ -316,9 +314,54 @@ export default function App() {
     alert('로그아웃 되었습니다.');
   };
 
-  const handleApproveMember = (id) => {
+  // --- 회원 가입 승인 처리 (Supabase DB 연동) ---
+  const handleApproveMember = async (id) => {
+    // 1. Supabase에서 해당 아이디를 가진 행을 찾아 status를 '승인완료'로 업데이트
+    const { data: allRows, error: fetchError } = await supabase
+      .from('xbtf')
+      .select('*');
+
+    if (fetchError) {
+      alert('회원 정보를 불러오는 중 오류가 발생했습니다: ' + fetchError.message);
+      return;
+    }
+
+    let targetRowId = null;
+    let updatedMemberData = null;
+
+    for (let row of allRows) {
+      try {
+        let parsed = row.xbtf;
+        if (typeof parsed === 'string') {
+          parsed = JSON.parse(parsed);
+        }
+        if (parsed && parsed.id === id) {
+          targetRowId = row.id; // Supabase 내부 고유 id (primary key)
+          updatedMemberData = { ...parsed, status: '승인완료' };
+          break;
+        }
+      } catch (e) {
+        console.error('파싱 에러:', e);
+      }
+    }
+
+    if (targetRowId !== null && updatedMemberData) {
+      const { error: updateError } = await supabase
+        .from('xbtf')
+        .update({ xbtf: JSON.stringify(updatedMemberData) })
+        .eq('id', targetRowId);
+
+      if (updateError) {
+        console.error('Supabase 승인 업데이트 오류:', updateError.message);
+        alert('DB 승인 처리 중 오류 발생: ' + updateError.message);
+        return;
+      }
+    }
+
+    // 2. 화면 상태 즉시 반영
     setMembersList(membersList.map(m => m.id === id ? { ...m, status: '승인완료' } : m));
     alert('회원 가입이 승인되었습니다.');
+    fetchMembersFromSupabase();
   };
 
   const handleAdminSendDetails = (reqId) => {
@@ -352,7 +395,7 @@ export default function App() {
       }));
     }
 
-    alert('입금 안내 정보가 회원에게 전달되었으며, 예치 승인 및 잔고 충전이 완료되었습니다.');
+    alert('입금 안내 정보가 전달되었으며, 예치 승인 및 잔고 충전이 완료되었습니다.');
   };
 
   const handleApproveWithdraw = (reqId) => {
