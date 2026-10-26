@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { 
   TrendingUp, TrendingDown, RefreshCw, Calendar, FileText, 
   User, Lock, CheckCircle, AlertCircle, ArrowUpRight, ArrowDownRight, 
-  Search, Shield, DollarSign, BarChart2, PieChart, Users, Settings, Bell, ChevronRight, Check, X, LogOut, LogIn, Wallet, ArrowUp, ArrowDown, Send, Phone, Mail
+  Search, Shield, DollarSign, BarChart2, PieChart, Users, Settings, Bell, ChevronRight, Check, X, LogOut, LogIn, Wallet, ArrowUp, ArrowDown, Send, Phone, Mail, ChevronLeft
 } from 'lucide-react';
 
 export default function App() {
@@ -11,6 +11,10 @@ export default function App() {
   const [chartPeriod, setChartPeriod] = useState('1m'); 
   const [perfTab, setPerfTab] = useState('daily'); 
   const [showMoreModal, setShowMoreModal] = useState(false); 
+
+  // --- 페이지네이션 상태 관리 ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // --- 인증 및 로그인/회원가입 상태 관리 ---
   const [authModal, setAuthModal] = useState(null); // 'login' | 'signup' | null
@@ -115,7 +119,7 @@ export default function App() {
   const [currentNav, setCurrentNav] = useState(33521.21);
   const [dailyReturn, setDailyReturn] = useState(4.70);
   const [weeklyReturn, setWeeklyReturn] = useState(17.83);
-  const [monthlyReturn, setMonthlyReturn] = useState(68.32); //[cite: 7]
+  const [monthlyReturn, setMonthlyReturn] = useState(68.32);
   
   const [lastUpdated, setLastUpdated] = useState(() => {
     const now = new Date();
@@ -155,7 +159,6 @@ export default function App() {
     ]
   };
 
-  // 9월 1일부터 10월 26일까지의 모든 평일(주말 제외) 기준가 및 변동률 내역
   const [historyList, setHistoryList] = useState([
     { date: '2026.10.26', price: 33521.21, change: '+4.70%' },
     { date: '2026.10.23', price: 32029.15, change: '+3.78%' },
@@ -212,11 +215,17 @@ export default function App() {
     { date: '2026년 7월 마감', price: 19000.00, change: '+15.80%' },
   ];
 
+  // 페이지네이션 계산 로직
   const getCurrentTableData = () => {
     if (perfTab === 'weekly') return weeklyHistoryList;
     if (perfTab === 'monthly') return monthlyHistoryList;
-    return historyList;
+    
+    // 일별 탭일 경우 페이징 처리
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return historyList.slice(startIndex, startIndex + itemsPerPage);
   };
+
+  const totalPages = perfTab === 'daily' ? Math.ceil(historyList.length / itemsPerPage) : 1;
 
   const getCurrentDateRange = () => {
     if (perfTab === 'weekly') return '최근 4주간 집계';
@@ -833,50 +842,86 @@ export default function App() {
               </div>
             </div>
 
+            {/* ================= 운용성과 상세 내역 (페이지네이션 적용) ================= */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
-                  <h3 className="text-lg font-bold text-slate-900">운용성과 상세 내역</h3>
-                  <div className="flex items-center space-x-2">
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                      {['daily', 'weekly', 'monthly'].map((t) => (
-                        <button
-                          key={t}
-                          onClick={() => setPerfTab(t)}
-                          className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${perfTab === t ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
-                        >
-                          {t === 'daily' ? '일별' : t === 'weekly' ? '주별' : '월별'}
-                        </button>
-                      ))}
+              <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+                    <h3 className="text-lg font-bold text-slate-900">운용성과 상세 내역</h3>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex bg-slate-100 p-1 rounded-lg">
+                        {['daily', 'weekly', 'monthly'].map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => { setPerfTab(t); setCurrentPage(1); }}
+                            className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${perfTab === t ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
+                          >
+                            {t === 'daily' ? '일별' : t === 'weekly' ? '주별' : '월별'}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-xs text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+                        {getCurrentDateRange()}
+                      </span>
                     </div>
-                    <span className="text-xs text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
-                      {getCurrentDateRange()}
-                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto min-h-[440px]">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 bg-slate-50">
+                          <th className="py-3 px-4">{perfTab === 'monthly' ? '월별 구분' : perfTab === 'weekly' ? '주차 기간' : '날짜'}</th>
+                          <th className="py-3 px-4">기준가(원)</th>
+                          <th className="py-3 px-4 text-right">{perfTab === 'monthly' ? '월간 변동률' : perfTab === 'weekly' ? '주간 변동률' : '일간 변동률'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-sm">
+                        {getCurrentTableData().map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/80 transition">
+                            <td className="py-3 px-4 font-medium text-slate-700">{row.date}</td>
+                            <td className="py-3 px-4 font-bold text-slate-900">{row.price.toLocaleString()}원</td>
+                            <td className={`py-3 px-4 text-right font-semibold ${row.change.startsWith('-') ? 'text-rose-600' : 'text-emerald-600'}`}>
+                              {row.change.startsWith('-') ? '▼ ' : '▲ '}{row.change}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 bg-slate-50">
-                        <th className="py-3 px-4">{perfTab === 'monthly' ? '월별 구분' : perfTab === 'weekly' ? '주차 기간' : '날짜'}</th>
-                        <th className="py-3 px-4">기준가(원)</th>
-                        <th className="py-3 px-4 text-right">{perfTab === 'monthly' ? '월간 변동률' : perfTab === 'weekly' ? '주간 변동률' : '일간 변동률'}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
-                      {getCurrentTableData().map((row, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/80 transition">
-                          <td className="py-3 px-4 font-medium text-slate-700">{row.date}</td>
-                          <td className="py-3 px-4 font-bold text-slate-900">{row.price.toLocaleString()}원</td>
-                          <td className={`py-3 px-4 text-right font-semibold ${row.change.startsWith('-') ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {row.change.startsWith('-') ? '▼ ' : '▲ '}{row.change}
-                          </td>
-                        </tr>
+                {/* 페이지네이션 컨트롤 바 */}
+                {perfTab === 'daily' && totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" /> 이전
+                    </button>
+
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(num => (
+                        <button
+                          key={num}
+                          onClick={() => setCurrentPage(num)}
+                          className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${currentPage === num ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:bg-slate-100'}`}
+                        >
+                          {num}
+                        </button>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1"
+                    >
+                      다음 <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
@@ -898,7 +943,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= [더보기 >] 모달 (9월 1일~10월 26일 평일 전체 내역) ================= */}
+        {/* ================= [더보기 >] 모달 ================= */}
         {showMoreModal && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl relative max-h-[85vh] flex flex-col">
